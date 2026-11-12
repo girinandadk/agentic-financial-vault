@@ -64,14 +64,18 @@ def process_dropped_file(file_path: Path):
     file_hash = compute_file_sha256(file_path)
     suffix = file_path.suffix.lower()
 
-    # Deduplication check in DB
+    # Deduplication check in DB: Only skip exact identical files if they already have an invoice record
     with get_db() as conn:
         cur = conn.execute("SELECT file_hash, file_name FROM processed_files WHERE file_hash = ?", (file_hash,))
-        if cur.fetchone():
-            logger.info(f"File {file_path.name} (SHA: {file_hash[:8]}...) has already been processed. Archiving duplicate.")
-            archive_path = PROCESSED_ARCHIVE_DIR / f"duplicate_{int(time.time())}_{file_path.name}"
-            shutil.move(str(file_path), str(archive_path))
-            return
+        already_processed = cur.fetchone()
+        if already_processed:
+            # Check if this file actually created an invoice record previously
+            existing_inv = conn.execute("SELECT invoice_id FROM invoices WHERE raw_file_name = ?", (file_path.name,)).fetchone()
+            if existing_inv:
+                logger.info(f"File {file_path.name} (SHA: {file_hash[:8]}...) was already audited (Inv #{existing_inv['invoice_id']}). Skipping duplicate.")
+                archive_path = PROCESSED_ARCHIVE_DIR / f"duplicate_{int(time.time())}_{file_path.name}"
+                shutil.move(str(file_path), str(archive_path))
+                return
 
     # Ingest depending on doc_type
     doc_type = "UNKNOWN"

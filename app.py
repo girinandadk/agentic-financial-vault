@@ -191,16 +191,32 @@ async def upload_stream(files: List[UploadFile] = File(...)):
 
         run_reconciliation()
 
-        # Query latest invoice
+        # Query the exact invoice that was uploaded in this session by matching uploaded filenames
+        uploaded_names = [f.filename for f in files]
         with get_db() as conn:
-            inv = conn.execute("""
-                SELECT i.invoice_id, i.invoice_number, i.invoice_date, i.subtotal, i.tax_amount, i.total_amount, i.status, 
-                       v.name as vendor_name, i.raw_file_name
-                FROM invoices i
-                LEFT JOIN vendors v ON i.vendor_id = v.vendor_id
-                ORDER BY i.invoice_id DESC
-                LIMIT 1
-            """).fetchone()
+            inv = None
+            for fname in uploaded_names:
+                inv = conn.execute("""
+                    SELECT i.invoice_id, i.invoice_number, i.invoice_date, i.subtotal, i.tax_amount, i.total_amount, i.status, 
+                           v.name as vendor_name, i.raw_file_name
+                    FROM invoices i
+                    LEFT JOIN vendors v ON i.vendor_id = v.vendor_id
+                    WHERE i.raw_file_name = ?
+                    ORDER BY i.invoice_id DESC
+                    LIMIT 1
+                """, (fname,)).fetchone()
+                if inv:
+                    break
+
+            if not inv:
+                inv = conn.execute("""
+                    SELECT i.invoice_id, i.invoice_number, i.invoice_date, i.subtotal, i.tax_amount, i.total_amount, i.status, 
+                           v.name as vendor_name, i.raw_file_name
+                    FROM invoices i
+                    LEFT JOIN vendors v ON i.vendor_id = v.vendor_id
+                    ORDER BY i.invoice_id DESC
+                    LIMIT 1
+                """).fetchone()
 
         inv_data = dict(inv) if inv else None
         yield f"data: {json.dumps({'step': 5, 'percent': 100, 'stage': 'COMPLETE', 'msg': 'Audit & Tally compilation complete!', 'invoice': inv_data})}\n\n"
