@@ -745,6 +745,17 @@
           </div>
         </div>
 
+        <!-- Live Agent Logs Console Stream -->
+        <div style="margin-bottom:14px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:11px; font-weight:700; color:#38bdf8; text-transform:uppercase; letter-spacing:0.5px;">🖥️ Real-Time Audit & Inference Logs</span>
+            <span id="log-poll-badge" style="font-size:10px; color:#10b981; font-family:monospace;">● LIVE STREAM</span>
+          </div>
+          <div id="modal-log-terminal" style="background:#090d16; border:1px solid #223254; border-radius:8px; padding:10px 12px; height:120px; overflow-y:auto; font-family:'Menlo','Monaco','Courier New',monospace; font-size:11px; color:#94a3b8; line-height:1.4;">
+            <div style="color:#64748b;">Initializing inference logger...</div>
+          </div>
+        </div>
+
         <!-- Visual Step Tracker -->
         <div style="display:flex; justify-content:space-between; font-size:11px; color:#64748b; font-weight:600; text-transform:uppercase;">
           <span id="step-lbl-1" style="color:#38bdf8;">1. Ingest</span>
@@ -754,6 +765,29 @@
         </div>
       `;
       document.body.appendChild(banner);
+
+      // Start live log terminal polling
+      const logTerminal = document.getElementById('modal-log-terminal');
+      const logPollInterval = setInterval(async () => {
+        try {
+          const lResp = await fetch('/api/logs?lines=20');
+          if (lResp.ok) {
+            const lData = await lResp.json();
+            if (lData.logs && logTerminal) {
+              logTerminal.innerHTML = lData.logs.map(line => {
+                let col = '#94a3b8';
+                if (line.includes('[WARNING]') || line.includes('FLAGGED') || line.includes('ANOMALY')) col = '#f43f5e';
+                else if (line.includes('SUCCESS') || line.includes('VERIFIED') || line.includes('Tally format')) col = '#10b981';
+                else if (line.includes('AGENT')) col = '#38bdf8';
+                return `<div style="color:${col}; margin-bottom:2px;">${line}</div>`;
+              }).join('');
+              logTerminal.scrollTop = logTerminal.scrollHeight;
+            }
+          }
+        } catch (e) {
+          console.debug("Log poll:", e);
+        }
+      }, 700);
 
       try {
         const resp = await fetch('/api/upload-stream', {
@@ -857,15 +891,32 @@
               Total Due: $${Number(inv.total_amount).toLocaleString(undefined, {minimumFractionDigits:2})}
             </div>
           </div>
-          <div style="display:flex; gap:10px; align-items:center; margin-top:12px; border-top:1px solid #334155; padding-top:12px;">
-            ${isClean 
-              ? `<a href="/api/tally/preview/${inv.invoice_id}" target="_blank" class="btn btn-primary btn-sm" style="text-decoration:none;">📄 View Tally XML Voucher</a>`
-              : `<span style="color:#f43f5e; font-size:12px; font-weight:600;">⚠️ Halted by Agent 1 (Check Forensic Flags tab)</span>`
-            }
-            <button type="button" class="btn btn-secondary btn-sm" onclick="window.location.reload()">Refresh Cockpit</button>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px; border-top:1px solid #334155; padding-top:12px;">
+            <div>
+              ${isClean 
+                ? `<a href="/api/tally/preview/${inv.invoice_id}" target="_blank" class="btn btn-primary btn-sm" style="text-decoration:none;">📄 View Tally XML Voucher</a>`
+                : `<span style="color:#f43f5e; font-size:12px; font-weight:600;">⚠️ Halted by Agent 1 (Check Forensic Flags)</span>`
+              }
+            </div>
+            <div id="auto-refresh-countdown" style="font-size:12px; color:#38bdf8; font-weight:600; display:flex; align-items:center; gap:6px;">
+              <span class="status-indicator" style="animation: pulse 0.8s infinite;"></span>
+              Auto-refreshing cockpit in <span id="refresh-secs">2</span>s...
+            </div>
           </div>
         </div>
       `;
+
+      // Automatically refresh the cockpit after showing final audit result
+      let countdown = 2;
+      const cdEl = document.getElementById('refresh-secs');
+      const timer = setInterval(() => {
+        countdown--;
+        if (cdEl) cdEl.innerText = countdown;
+        if (countdown <= 0) {
+          clearInterval(timer);
+          window.location.reload();
+        }
+      }, 1000);
     }
 
     async function fallbackDirectUpload(formData, banner) {

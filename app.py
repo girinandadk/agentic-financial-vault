@@ -338,6 +338,20 @@ def preview_tally_voucher(invoice_id: int):
     return HTMLResponse(content=f"<pre style='background:#0f172a; color:#38bdf8; padding:20px; border-radius:8px; font-family:monospace;'>{xml_content}</pre>")
 
 
+@app.get("/api/logs")
+def get_recent_logs(lines: int = 40):
+    """Returns the most recent execution and audit logs from server.log."""
+    log_path = Path(__file__).parent / "server.log"
+    if not log_path.exists():
+        return {"logs": ["Waiting for engine logs..."]}
+    try:
+        with open(log_path, "r", encoding="utf-8", errors="ignore") as f:
+            all_lines = f.readlines()
+            return {"logs": [l.rstrip() for l in all_lines[-lines:]]}
+    except Exception as e:
+        return {"logs": [f"Error reading logs: {e}"]}
+
+
 from config import PROCESSED_ARCHIVE_DIR, VAULT_DROP_DIR
 
 @app.get("/api/vault/view/{filename}")
