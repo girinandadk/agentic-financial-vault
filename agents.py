@@ -107,20 +107,18 @@ def run_agent1_forensic_audit(invoice_id: int) -> Agent1AuditResult:
         severity = "HIGH" if severity != "CRITICAL" else "CRITICAL"
         arithmetic_valid = False
 
-    # 3. Duplicate checks in DB
+    # 3. Duplicate checks in DB (check against already reconciled or older records)
     with get_db() as conn:
         dup_rows = conn.execute("""
-            SELECT invoice_id, invoice_number, total_amount FROM invoices 
-            WHERE invoice_id != ? AND (
-                UPPER(invoice_number) = UPPER(?) 
-                OR UPPER(invoice_number) LIKE UPPER(? || '-%') 
-                OR UPPER(?) LIKE UPPER(invoice_number || '-%')
-            )
-        """, (inv["invoice_id"], inv["invoice_number"], inv["invoice_number"], inv["invoice_number"])).fetchall()
+            SELECT invoice_id, invoice_number, total_amount, raw_file_name FROM invoices 
+            WHERE invoice_id != ? AND UPPER(invoice_number) = UPPER(?)
+        """, (inv["invoice_id"], inv["invoice_number"])).fetchall()
 
         for d in dup_rows:
-            issues.append(f"Duplicate / Near-duplicate collision with Invoice #{d['invoice_id']} ('{d['invoice_number']}')")
-            severity = "CRITICAL"
+            # Only flag as duplicate if it's truly a duplicate of a previously ingested distinct file
+            if d["invoice_id"] < inv["invoice_id"]:
+                issues.append(f"Duplicate invoice collision with previously ingested Invoice #{d['invoice_id']} ('{d['invoice_number']}')")
+                severity = "CRITICAL"
 
     # 4. Check existing audit flags for this invoice
     with get_db() as conn:

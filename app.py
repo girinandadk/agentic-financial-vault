@@ -152,23 +152,43 @@ import threading
 
 @app.post("/api/upload-and-run")
 async def upload_and_run(files: List[UploadFile] = File(...)):
-    """AJAX endpoint: Saves files into vault_drop immediately and launches agents without timing out the browser."""
-    saved_files = []
+    """AJAX endpoint: Saves files into vault_drop immediately, extracts data, audits with Agent 1, compiles with Agent 2, and returns structured result."""
+    processed_details = []
+    
     for file in files:
         target_path = VAULT_DROP_DIR / file.filename
         with open(target_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-        saved_files.append(file.filename)
-        # Process the single file immediately
         process_dropped_file(target_path)
 
-    # Run Two-Agent audit & reconciliation synchronously so results are ready
-    run_two_agent_pipeline(only_new_pending=True)
+    # Run Two-Agent audit pipeline
+    run_two_agent_pipeline(only_new_pending=False)
     run_reconciliation()
+
+    # Fetch the latest processed invoices
+    with get_db() as conn:
+        latest_invs = conn.execute("""
+            SELECT i.invoice_id, i.invoice_number, i.invoice_date, i.subtotal, i.tax_amount, i.total_amount, i.status, 
+                   v.name as vendor_name, i.raw_file_name
+            FROM invoices i
+            LEFT JOIN vendors v ON i.vendor_id = v.vendor_id
+            ORDER BY i.invoice_id DESC
+            LIMIT 5
+        """).fetchall()
+
+        latest_flags = conn.execute("""
+            SELECT flag_id, reference_type, reference_id, severity, issue_type, description, status
+            FROM audit_flags
+            WHERE status = 'OPEN'
+            ORDER BY flag_id DESC
+            LIMIT 6
+        """).fetchall()
 
     return JSONResponse({
         "status": "success",
-        "message": f"Successfully ingested {len(saved_files)} file(s). Agent 1 audited the values and Agent 2 prepared the Tally vouchers!"
+        "message": f"Processed {len(files)} bill(s) through Agent 1 and Agent 2.",
+        "invoices": [dict(r) for r in latest_invs],
+        "flags": [dict(f) for f in latest_flags]
     })
 
 

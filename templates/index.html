@@ -735,21 +735,53 @@
         if (resp.ok) {
           const data = await resp.json();
           banner.style.borderColor = '#10b981';
-          banner.innerHTML = `
-            <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
-              <span style="font-size:28px;">✅</span>
-              <div>
-                <strong style="font-size:17px; color:#10b981; display:block;">Audit & Conversion Complete!</strong>
-                <span style="font-size:12px; color:#94a3b8;">Dashboard updating now</span>
+          banner.style.maxWidth = '640px';
+          
+          let invHtml = '';
+          if (data.invoices && data.invoices.length > 0) {
+            const inv = data.invoices[0];
+            const isClean = inv.status === 'READY_FOR_TALLY' || inv.status === 'VERIFIED_CLEAN';
+            const statusColor = isClean ? '#10b981' : '#f43f5e';
+            const statusLabel = isClean ? 'VERIFIED & CONVERTED' : 'ANOMALY DETECTED';
+            
+            invHtml = `
+              <div style="background:#1e293b; border:1px solid #334155; border-radius:10px; padding:16px; margin:16px 0; text-align:left;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+                  <strong style="color:#ffffff; font-size:16px;">${inv.vendor_name || 'Vendor'}</strong>
+                  <span style="background:${isClean ? 'rgba(16,185,129,0.2)' : 'rgba(244,63,94,0.2)'}; color:${statusColor}; border:1px solid ${statusColor}; padding:3px 10px; border-radius:9999px; font-size:11px; font-weight:800;">
+                    ${statusLabel}
+                  </span>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:13px; color:#cbd5e1; margin-bottom:12px;">
+                  <div><strong>Invoice #:</strong> ${inv.invoice_number}</div>
+                  <div><strong>Invoice Date:</strong> ${inv.invoice_date || 'N/A'}</div>
+                  <div><strong>Subtotal:</strong> $${Number(inv.subtotal).toLocaleString(undefined, {minimumFractionDigits:2})}</div>
+                  <div><strong>Tax:</strong> $${Number(inv.tax_amount).toLocaleString(undefined, {minimumFractionDigits:2})}</div>
+                  <div style="grid-column:1/-1; font-size:15px; font-weight:700; color:#38bdf8;">
+                    Total Due: $${Number(inv.total_amount).toLocaleString(undefined, {minimumFractionDigits:2})}
+                  </div>
+                </div>
+                <div style="display:flex; gap:10px; align-items:center; margin-top:12px; border-top:1px solid #334155; padding-top:12px;">
+                  ${isClean 
+                    ? `<a href="/api/tally/preview/${inv.invoice_id}" target="_blank" class="btn btn-primary btn-sm" style="text-decoration:none;">📄 View Tally XML Voucher</a>`
+                    : `<span style="color:#f43f5e; font-size:12px; font-weight:600;">⚠️ Halted by Agent 1 (Check Forensic Flags tab)</span>`
+                  }
+                  <button type="button" class="btn btn-secondary btn-sm" onclick="window.location.reload()">Refresh Cockpit</button>
+                </div>
               </div>
+            `;
+          }
+
+          banner.innerHTML = `
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span style="font-size:26px;">🎯</span>
+                <strong style="font-size:18px; color:#ffffff;">Agent 1 & Agent 2 Results</strong>
+              </div>
+              <button onclick="document.getElementById('active-upload-modal').remove(); window.location.reload();" style="background:transparent; border:none; color:#94a3b8; font-size:20px; cursor:pointer;">&times;</button>
             </div>
-            <div style="font-size:13px; color:#f8fafc; line-height:1.4; margin-bottom:10px;">
-              ${data.message}
-            </div>
+            ${invHtml}
           `;
-          setTimeout(() => {
-            window.location.reload();
-          }, 1000);
         } else {
           // Fallback to standard form upload if AJAX is blocked
           console.warn("AJAX failed, falling back to standard POST /api/upload");
