@@ -219,13 +219,14 @@ def extract_regex_invoice(raw_text: str, filename: str) -> ExtractedInvoice:
 
 
 def extract_from_image(image_path: Path) -> ExtractedInvoice:
-    """Extracts structured invoice from an image (.png, .jpg, .jpeg) using Gemma 4 multimodal vision or fallback."""
+    """Extracts structured invoice from an image (.png, .jpg, .jpeg) using local Gemma 4 multimodal vision or Gemini API fallback."""
     try:
         with Image.open(image_path) as img:
             rgb_img = img.convert("RGB")
             buf = io.BytesIO()
             rgb_img.save(buf, format="JPEG", quality=90)
-            img_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+            img_bytes = buf.getvalue()
+            img_b64 = base64.b64encode(img_bytes).decode("utf-8")
     except Exception as e:
         logger.error(f"Failed to read image {image_path}: {e}")
         return ExtractedInvoice(
@@ -237,32 +238,31 @@ def extract_from_image(image_path: Path) -> ExtractedInvoice:
             total_amount=0.0
         )
 
-    # Prompt for Gemma 4
     prompt = (
-        "You are an expert corporate financial auditor. Analyze this invoice or receipt image and extract the "
-        "structured data strictly matching the requested JSON schema.\n"
-        "Fields to extract:\n"
-        "- vendor_name: string\n"
-        "- tax_id: string or null\n"
-        "- invoice_number: string\n"
-        "- invoice_date: string (format YYYY-MM-DD)\n"
-        "- subtotal: float\n"
-        "- tax_amount: float\n"
-        "- total_amount: float\n"
-        "- category: string (expense category)\n"
-        "- bank_account_last4: string or null (last 4 digits of vendor remittance bank account if mentioned)\n"
-        "Return strictly valid JSON with no markdown and no conversational text."
+        "You are an expert corporate financial auditor. Analyze this bill or receipt image and extract the "
+        "structured data matching the schema:\n"
+        "- vendor_name: Exact supplier or company name\n"
+        "- tax_id: Tax ID / GSTIN / VAT / EIN or null\n"
+        "- invoice_number: Invoice or bill number\n"
+        "- invoice_date: Date formatted as YYYY-MM-DD\n"
+        "- subtotal: Pre-tax subtotal float\n"
+        "- tax_amount: Total tax or VAT float\n"
+        "- total_amount: Final total payable float\n"
+        "- category: Standard corporate expense category\n"
+        "- bank_account_last4: Last 4 digits of vendor remittance bank account if present or null"
     )
 
-    json_schema = ExtractedInvoice.model_json_schema()
-    llm_resp = call_ollama_generate(prompt=prompt, image_b64=img_b64, format_schema=json_schema)
-
-    if llm_resp:
-        try:
-            parsed = json.loads(clean_json_markdown(llm_resp))
-            return ExtractedInvoice(**parsed)
-        except Exception as e:
-            logger.warning(f"Failed to parse Gemma 4 image response as ExtractedInvoice: {e}. Payload: {llm_resp}")
+    # Use unified generate_structured_output (Ollama gemma4:e4b multimodal -> Gemini API multimodal fallback)
+    llm_extracted = generate_structured_output(
+        prompt=prompt,
+        schema_cls=ExtractedInvoice,
+        image_b64=img_b64,
+        image_bytes=img_bytes,
+        mime_type="image/jpeg"
+    )
+    if llm_extracted:
+        logger.info(f"[LLM VISION EXTRACTION] {image_path.name} -> {llm_extracted.vendor_name} ({llm_extracted.invoice_number}) Total: ${llm_extracted.total_amount:,.2f}")
+        return llm_extracted
 
     # Fallback to Tesseract OCR + Heuristic
     with Image.open(image_path) as img:
