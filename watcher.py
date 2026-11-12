@@ -146,7 +146,7 @@ def process_dropped_file(file_path: Path):
         # Record file as processed
         with get_db() as conn:
             conn.execute("""
-                INSERT INTO processed_files (file_hash, file_name, doc_type)
+                INSERT OR REPLACE INTO processed_files (file_hash, file_name, doc_type)
                 VALUES (?, ?, ?)
             """, (file_hash, file_path.name, doc_type))
 

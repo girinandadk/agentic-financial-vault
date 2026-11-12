@@ -22,6 +22,7 @@ import pdfplumber
 import pypdf
 
 from config import OLLAMA_HOST, OLLAMA_MODEL, OLLAMA_NUM_CTX, OLLAMA_TIMEOUT
+from llm_client import generate_structured_output
 from db import mask_account_number
 
 logger = logging.getLogger("finsentry.extractor")
@@ -291,31 +292,25 @@ def extract_from_pdf(pdf_path: Path) -> ExtractedInvoice:
     except Exception as e:
         logger.warning(f"pdfplumber extraction encountered error on {pdf_path}: {e}")
 
-    # If text is present, ask Gemma 4 to extract JSON schema or parse with regex
+    # If text is present, extract via unified LLM (local Gemma 4 / Gemini API) with regex fallback
     if len(full_text.strip()) >= 50:
         prompt = (
-            f"You are a corporate financial auditor. Extract the structured invoice fields from the following invoice text:\n\n"
-            f"```\n{full_text[:3500]}\n```\n\n"
-            f"Return strictly JSON matching:\n"
-            f"- vendor_name (str)\n"
-            f"- tax_id (str or null)\n"
-            f"- invoice_number (str)\n"
-            f"- invoice_date (YYYY-MM-DD)\n"
-            f"- subtotal (float)\n"
-            f"- tax_amount (float)\n"
-            f"- total_amount (float)\n"
-            f"- category (str)\n"
-            f"- bank_account_last4 (str or null)\n"
-            f"Do not include explanation or markdown."
+            f"You are an autonomous corporate financial auditor. Read this invoice text and extract the exact fields:\n"
+            f"- vendor_name: Exact corporate vendor name\n"
+            f"- tax_id: Tax ID / GSTIN / VAT / EIN or null\n"
+            f"- invoice_number: Invoice reference number\n"
+            f"- invoice_date: Date formatted as YYYY-MM-DD\n"
+            f"- subtotal: Pre-tax subtotal float\n"
+            f"- tax_amount: Tax/VAT float\n"
+            f"- total_amount: Total amount float\n"
+            f"- category: Expense category (e.g. Cloud & Infrastructure, Office Supplies, Legal Services, Logistics, Hardware)\n"
+            f"- bank_account_last4: Last 4 digits of vendor remittance bank account if mentioned or null\n\n"
+            f"INVOICE TEXT:\n```\n{full_text[:4000]}\n```\n"
         )
-        json_schema = ExtractedInvoice.model_json_schema()
-        llm_resp = call_ollama_generate(prompt=prompt, format_schema=json_schema)
-        if llm_resp:
-            try:
-                parsed = json.loads(clean_json_markdown(llm_resp))
-                return ExtractedInvoice(**parsed)
-            except Exception as e:
-                logger.warning(f"Failed to parse LLM text response: {e}")
+        llm_extracted = generate_structured_output(prompt, ExtractedInvoice)
+        if llm_extracted:
+            logger.info(f"[LLM EXTRACTION SUCCESS] {pdf_path.name} -> {llm_extracted.vendor_name} (#{llm_extracted.invoice_number}) Total: ${llm_extracted.total_amount:,.2f}")
+            return llm_extracted
 
         return extract_regex_invoice(full_text, pdf_path.name)
 

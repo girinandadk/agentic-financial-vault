@@ -27,7 +27,8 @@ OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "4096"))
 OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_TIMEOUT", "8.0"))  # Fast failover to Gemini if Ollama is not running locally
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
+GEMINI_FALLBACK_MODELS = ["gemini-3.1-flash-lite", "gemini-3.5-flash", "gemini-3.8-flash"]
 
 
 def clean_markdown_json(text: str) -> str:
@@ -98,14 +99,20 @@ def call_gemini_api(prompt: str, image_bytes: Optional[bytes] = None, mime_type:
 
         config = types.GenerateContentConfig(**config_args)
 
-        response = client.models.generate_content(
-            model=GEMINI_MODEL,
-            contents=contents,
-            config=config,
-        )
-        if response and response.text:
-            logger.info(f"Gemini API ({GEMINI_MODEL}) responded successfully.")
-            return response.text.strip()
+        target_models = [GEMINI_MODEL] + [m for m in GEMINI_FALLBACK_MODELS if m != GEMINI_MODEL]
+        for m in target_models:
+            try:
+                response = client.models.generate_content(
+                    model=m,
+                    contents=contents,
+                    config=config,
+                )
+                if response and response.text:
+                    logger.info(f"Gemini API ({m}) responded successfully.")
+                    return response.text.strip()
+            except Exception as model_err:
+                logger.warning(f"Gemini model {m} attempt error: {model_err}")
+                continue
     except Exception as e:
         logger.warning(f"Gemini API fallback call failed: {e}")
     return None

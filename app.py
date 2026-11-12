@@ -120,15 +120,62 @@ def index(request: Request):
 
 
 @app.post("/api/upload")
-async def upload_files(files: List[UploadFile] = File(...)):
-    """Uploads files directly into vault_drop and processes them immediately."""
+async def upload_files(files: List[UploadFile] = File(...), run_agents: bool = Query(True)):
+    """Uploads bills directly into vault_drop, extracts structured data via LLM, and runs the 2-agent pipeline."""
+    uploaded_files = []
     for file in files:
         target_path = VAULT_DROP_DIR / file.filename
         with open(target_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
+        uploaded_files.append(file.filename)
         # Trigger immediate processing
         process_dropped_file(target_path)
-    return RedirectResponse(url="/", status_code=303)
+    
+    if run_agents:
+        run_two_agent_pipeline()
+        run_reconciliation()
+
+    return RedirectResponse(url="/?uploaded=" + str(len(uploaded_files)), status_code=303)
+
+
+@app.post("/api/upload-and-run")
+async def upload_and_run(files: List[UploadFile] = File(...)):
+    """AJAX endpoint: Uploads bills, executes Agent 1 & Agent 2 dynamically, and returns JSON audit results."""
+    results = []
+    for file in files:
+        target_path = VAULT_DROP_DIR / file.filename
+        with open(target_path, "wb") as buffer:
+            shutil.copyfileobj(file.file, buffer)
+        process_dropped_file(target_path)
+
+    # Run Two-Agent pipeline
+    run_two_agent_pipeline()
+    run_reconciliation()
+
+    # Query latest state
+    with get_db() as conn:
+        invoices = conn.execute("""
+            SELECT i.invoice_id, i.invoice_number, i.invoice_date, i.subtotal, i.tax_amount, i.total_amount, i.status, v.name as vendor_name
+            FROM invoices i
+            LEFT JOIN vendors v ON i.vendor_id = v.vendor_id
+            ORDER BY i.invoice_id DESC
+            LIMIT 10
+        """).fetchall()
+
+        flags = conn.execute("""
+            SELECT flag_id, reference_type, reference_id, severity, issue_type, description, status
+            FROM audit_flags
+            WHERE status = 'OPEN'
+            ORDER BY flag_id DESC
+            LIMIT 10
+        """).fetchall()
+
+    return JSONResponse({
+        "status": "success",
+        "message": f"Processed {len(files)} bills through Agent 1 (Forensic Auditor) and Agent 2 (Tally Voucher Engine).",
+        "invoices": [dict(r) for r in invoices],
+        "flags": [dict(f) for f in flags]
+    })
 
 
 @app.post("/api/reconcile")

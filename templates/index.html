@@ -342,6 +342,11 @@
         <span style="font-size: 12px; color: var(--text-muted);">Continuous Forensic Reconciliation & Internal Controls</span>
       </div>
       <div class="topbar-actions">
+        <!-- One-Click Upload & Run Button -->
+        <label class="btn btn-primary" style="cursor: pointer; margin-right: 4px;">
+          📤 Upload Bills & Run Agents
+          <input type="file" id="topbar-file-input" multiple accept=".pdf,.png,.jpg,.jpeg,.csv" style="display:none;" onchange="handleDirectUpload(this)">
+        </label>
         <button class="btn btn-primary" onclick="triggerPipeline()">🤖 Run 2-Agent Audit & Tally</button>
         <button class="btn btn-secondary" onclick="triggerReconcile()">
           ⚡ Run Reconcile Cycle
@@ -641,14 +646,23 @@
             <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 20px;">
               Files uploaded here are saved directly to <code>{{ vault_drop_dir }}</code>. The background file watcher will automatically hash (SHA-256), extract structured data via Gemma 4 / OCR, archive the original to <code>processed_archive</code>, and execute reconciliation.
             </p>
-            <form action="/api/upload" method="post" enctype="multipart/form-data" class="dropzone" id="upload-form">
-              <input type="file" name="files" multiple style="display: none;" id="file-input" onchange="document.getElementById('upload-form').submit()">
-              <div onclick="document.getElementById('file-input').click()">
-                <div style="font-size: 32px; margin-bottom: 8px;">📁</div>
-                <div style="font-size: 15px; font-weight: 700; margin-bottom: 4px;">Click or Drag files to drop into Vault Drop</div>
-                <div style="font-size: 12px; color: var(--text-muted);">Supports PDF Invoices, Bank Statement CSVs, and Receipt Images (PNG, JPG)</div>
+            <div class="dropzone" id="drop-area" onclick="document.getElementById('file-input').click()">
+              <input type="file" id="file-input" multiple accept=".pdf,.png,.jpg,.jpeg,.csv" style="display: none;" onchange="handleDirectUpload(this)">
+              <div style="font-size: 40px; margin-bottom: 10px;">📤</div>
+              <div style="font-size: 18px; font-weight: 800; color: white; margin-bottom: 6px;">Select Bills to Upload & Run Autonomous Agents</div>
+              <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">
+                Agent 1 inspects for value corruption, calculation errors, duplicates & account manipulation.<br>
+                Agent 2 converts all verified bills into standard Tally XML format dynamically (no hardcoded responses).
               </div>
-            </form>
+              <button type="button" class="btn btn-primary" style="pointer-events: none;">Browse Files (PDF, PNG, JPG, CSV)</button>
+            </div>
+            
+            <div id="upload-status-box" style="display:none; margin-top:20px; padding:18px; border-radius:8px; background:var(--card); border:1px solid var(--border);">
+              <div style="display:flex; align-items:center; gap:10px;">
+                <span class="status-indicator" style="animation: pulse 1s infinite;"></span>
+                <span id="upload-status-text" style="font-size:14px; font-weight:600;">Processing bills through Agent 1 & Agent 2...</span>
+              </div>
+            </div>
           </div>
         </div>
       </section>
