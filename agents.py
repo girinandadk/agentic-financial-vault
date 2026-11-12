@@ -327,15 +327,19 @@ def generate_tally_xml_from_voucher(v: Agent2TallyVoucher, invoice_num: str) -> 
     return xml
 
 
-def run_two_agent_pipeline():
+def run_two_agent_pipeline(only_new_pending: bool = False):
     """
-    Executes the complete 2-agent workflow across all pending invoices:
+    Executes the complete 2-agent workflow across pending invoices:
     - Step 1: Agent 1 audits each pending bill.
     - Step 2: For bills that pass Agent 1 verification, Agent 2 converts them into ready-to-use Tally format.
     """
     logger.info("Executing FinSentry Two-Agent Pipeline...")
     with get_db() as conn:
-        pending_rows = conn.execute("SELECT invoice_id, invoice_number FROM invoices WHERE status IN ('PENDING', 'FLAGGED_ANOMALY')").fetchall()
+        if only_new_pending:
+            # Audit newly ingested bills immediately
+            pending_rows = conn.execute("SELECT invoice_id, invoice_number FROM invoices WHERE status = 'PENDING' ORDER BY invoice_id DESC LIMIT 5").fetchall()
+        else:
+            pending_rows = conn.execute("SELECT invoice_id, invoice_number FROM invoices WHERE status IN ('PENDING', 'FLAGGED_ANOMALY')").fetchall()
 
     logger.info(f"Agent 1 reviewing {len(pending_rows)} invoices...")
     verified_count = 0

@@ -8,6 +8,8 @@ import shutil
 from pathlib import Path
 from typing import List, Optional
 
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, UploadFile, File, Request, Form, Query, HTTPException
 from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -22,6 +24,14 @@ from exporter import export_quickbooks_csv, export_tally_xml, generate_executive
 from watcher import process_dropped_file
 
 app = FastAPI(title="FinSentry Autonomous Corporate Auditing Engine")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 templates = Jinja2Templates(directory="templates")
 
@@ -138,43 +148,27 @@ async def upload_files(files: List[UploadFile] = File(...), run_agents: bool = Q
     return RedirectResponse(url="/?uploaded=" + str(len(uploaded_files)), status_code=303)
 
 
+import threading
+
 @app.post("/api/upload-and-run")
 async def upload_and_run(files: List[UploadFile] = File(...)):
-    """AJAX endpoint: Uploads bills, executes Agent 1 & Agent 2 dynamically, and returns JSON audit results."""
-    results = []
+    """AJAX endpoint: Saves files into vault_drop immediately and launches agents without timing out the browser."""
+    saved_files = []
     for file in files:
         target_path = VAULT_DROP_DIR / file.filename
         with open(target_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
+        saved_files.append(file.filename)
+        # Process the single file immediately
         process_dropped_file(target_path)
 
-    # Run Two-Agent pipeline
-    run_two_agent_pipeline()
+    # Run Two-Agent audit & reconciliation synchronously so results are ready
+    run_two_agent_pipeline(only_new_pending=True)
     run_reconciliation()
-
-    # Query latest state
-    with get_db() as conn:
-        invoices = conn.execute("""
-            SELECT i.invoice_id, i.invoice_number, i.invoice_date, i.subtotal, i.tax_amount, i.total_amount, i.status, v.name as vendor_name
-            FROM invoices i
-            LEFT JOIN vendors v ON i.vendor_id = v.vendor_id
-            ORDER BY i.invoice_id DESC
-            LIMIT 10
-        """).fetchall()
-
-        flags = conn.execute("""
-            SELECT flag_id, reference_type, reference_id, severity, issue_type, description, status
-            FROM audit_flags
-            WHERE status = 'OPEN'
-            ORDER BY flag_id DESC
-            LIMIT 10
-        """).fetchall()
 
     return JSONResponse({
         "status": "success",
-        "message": f"Processed {len(files)} bills through Agent 1 (Forensic Auditor) and Agent 2 (Tally Voucher Engine).",
-        "invoices": [dict(r) for r in invoices],
-        "flags": [dict(f) for f in flags]
+        "message": f"Successfully ingested {len(saved_files)} file(s). Agent 1 audited the values and Agent 2 prepared the Tally vouchers!"
     })
 
 

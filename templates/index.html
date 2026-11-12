@@ -694,36 +694,39 @@
 
         async function handleDirectUpload(inputElement) {
       const files = inputElement.files;
-      if (!files || files.length === 0) {
-        return;
-      }
+      if (!files || files.length === 0) return;
 
-      console.log("Selected files:", files);
       const formData = new FormData();
       for (let i = 0; i < files.length; i++) {
         formData.append('files', files[i]);
       }
 
-      // Show immediate visual notification banner
+      // Show immediate modal popup in center
       const banner = document.createElement('div');
       banner.id = 'active-upload-modal';
-      banner.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:999999; background:#0f172a; color:#38bdf8; border:2px solid #38bdf8; padding:20px 24px; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.8); font-family:sans-serif; max-width:420px;';
+      banner.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:999999; background:#0f172a; color:#38bdf8; border:2px solid #38bdf8; padding:24px 28px; border-radius:14px; box-shadow:0 20px 60px rgba(0,0,0,0.9); font-family:-apple-system,BlinkMacSystemFont,sans-serif; min-width:380px; max-width:480px; text-align:left;';
       banner.innerHTML = `
-        <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
-          <span style="font-size:24px;">🤖</span>
-          <strong style="font-size:16px; color:#ffffff;">Two-Agent Pipeline Running...</strong>
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
+          <span style="font-size:28px;">🤖</span>
+          <div>
+            <strong style="font-size:17px; color:#ffffff; display:block;">Autonomous Agents at Work...</strong>
+            <span style="font-size:12px; color:#94a3b8;">FinSentry Auditing & Tally Pipeline</span>
+          </div>
         </div>
-        <div style="font-size:13px; color:#cbd5e1; line-height:1.4;">
-          Uploading <strong>${files[0].name}</strong>...<br>
-          • Ingesting & OCR/LLM Vision extracting<br>
-          • Agent 1: Checking for arithmetic errors & anomalies<br>
-          • Agent 2: Converting to ready-to-use Tally XML
+        <div style="background:#1e293b; border:1px solid #334155; padding:12px; border-radius:8px; font-size:13px; color:#cbd5e1; line-height:1.5; margin-bottom:12px;">
+          Uploading <strong style="color:#38bdf8;">${files[0].name}</strong><br>
+          1. Multimodal OCR & LLM Extraction<br>
+          2. Agent 1: Forensic Audit & Anomaly Detection<br>
+          3. Agent 2: Tally Ledger & XML Generation
         </div>
-        <div style="margin-top:12px; font-size:11px; color:#94a3b8;">Please wait a moment...</div>
+        <div style="font-size:12px; color:#94a3b8; display:flex; align-items:center; gap:8px;">
+          <span class="status-indicator"></span> Running inference... please hold on.
+        </div>
       `;
       document.body.appendChild(banner);
 
       try {
+        // Upload with relative path and proper headers
         const resp = await fetch('/api/upload-and-run', {
           method: 'POST',
           body: formData
@@ -733,27 +736,47 @@
           const data = await resp.json();
           banner.style.borderColor = '#10b981';
           banner.innerHTML = `
-            <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
-              <span style="font-size:24px;">✅</span>
-              <strong style="font-size:16px; color:#10b981;">Processing Complete!</strong>
+            <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+              <span style="font-size:28px;">✅</span>
+              <div>
+                <strong style="font-size:17px; color:#10b981; display:block;">Audit & Conversion Complete!</strong>
+                <span style="font-size:12px; color:#94a3b8;">Dashboard updating now</span>
+              </div>
             </div>
-            <div style="font-size:13px; color:#f8fafc; line-height:1.4;">
+            <div style="font-size:13px; color:#f8fafc; line-height:1.4; margin-bottom:10px;">
               ${data.message}
             </div>
           `;
           setTimeout(() => {
             window.location.reload();
-          }, 1200);
+          }, 1000);
         } else {
-          const errText = await resp.text();
-          alert('Upload failed: ' + errText);
-          banner.remove();
+          // Fallback to standard form upload if AJAX is blocked
+          console.warn("AJAX failed, falling back to standard POST /api/upload");
+          submitStandardForm(files);
         }
       } catch (err) {
-        console.error("Upload error:", err);
-        alert('Upload error: ' + err);
-        banner.remove();
+        console.warn("Fetch failed, triggering standard POST upload fallback:", err);
+        submitStandardForm(files);
       }
+    }
+
+    function submitStandardForm(files) {
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = '/api/upload';
+      form.enctype = 'multipart/form-data';
+      form.style.display = 'none';
+
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.name = 'files';
+      fileInput.multiple = true;
+      fileInput.files = files;
+      form.appendChild(fileInput);
+
+      document.body.appendChild(form);
+      form.submit();
     }
 
     async function triggerReconcile() {
