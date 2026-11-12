@@ -150,10 +150,14 @@ def process_dropped_file(file_path: Path):
                 VALUES (?, ?, ?)
             """, (file_hash, file_path.name, doc_type))
 
-        # Archive processed original file
+        # Archive processed original file safely
         archive_dest = PROCESSED_ARCHIVE_DIR / f"{int(time.time())}_{file_path.name}"
-        shutil.move(str(file_path), str(archive_dest))
-        logger.info(f"Archived {file_path.name} to {archive_dest.name}")
+        if file_path.exists():
+            try:
+                shutil.move(str(file_path), str(archive_dest))
+                logger.info(f"Archived {file_path.name} to {archive_dest.name}")
+            except Exception as move_err:
+                logger.warning(f"File {file_path.name} already moved or inaccessible: {move_err}")
 
         # Automatically trigger two-agent audit pipeline & reconciliation cycle
         run_two_agent_pipeline()

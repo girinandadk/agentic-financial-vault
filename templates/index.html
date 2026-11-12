@@ -343,10 +343,10 @@
       </div>
       <div class="topbar-actions">
         <!-- One-Click Upload & Run Button -->
-        <label class="btn btn-primary" style="cursor: pointer; margin-right: 4px;">
+        <button type="button" class="btn btn-primary" style="cursor: pointer; margin-right: 4px;" onclick="document.getElementById('topbar-file-input').click()">
           📤 Upload Bills & Run Agents
-          <input type="file" id="topbar-file-input" multiple accept=".pdf,.png,.jpg,.jpeg,.csv" style="display:none;" onchange="handleDirectUpload(this)">
-        </label>
+        </button>
+        <input type="file" id="topbar-file-input" multiple accept=".pdf,.png,.jpg,.jpeg,.csv" style="display:none;" onchange="handleDirectUpload(this)">
         <button class="btn btn-primary" onclick="triggerPipeline()">🤖 Run 2-Agent Audit & Tally</button>
         <button class="btn btn-secondary" onclick="triggerReconcile()">
           ⚡ Run Reconcile Cycle
@@ -690,6 +690,70 @@
         upload: "Ingestion & Vault Drop Monitor"
       };
       document.getElementById('page-title').innerText = titles[tabId] || "FinSentry Audit";
+    }
+
+        async function handleDirectUpload(inputElement) {
+      const files = inputElement.files;
+      if (!files || files.length === 0) {
+        return;
+      }
+
+      console.log("Selected files:", files);
+      const formData = new FormData();
+      for (let i = 0; i < files.length; i++) {
+        formData.append('files', files[i]);
+      }
+
+      // Show immediate visual notification banner
+      const banner = document.createElement('div');
+      banner.id = 'active-upload-modal';
+      banner.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:999999; background:#0f172a; color:#38bdf8; border:2px solid #38bdf8; padding:20px 24px; border-radius:12px; box-shadow:0 10px 30px rgba(0,0,0,0.8); font-family:sans-serif; max-width:420px;';
+      banner.innerHTML = `
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+          <span style="font-size:24px;">🤖</span>
+          <strong style="font-size:16px; color:#ffffff;">Two-Agent Pipeline Running...</strong>
+        </div>
+        <div style="font-size:13px; color:#cbd5e1; line-height:1.4;">
+          Uploading <strong>${files[0].name}</strong>...<br>
+          • Ingesting & OCR/LLM Vision extracting<br>
+          • Agent 1: Checking for arithmetic errors & anomalies<br>
+          • Agent 2: Converting to ready-to-use Tally XML
+        </div>
+        <div style="margin-top:12px; font-size:11px; color:#94a3b8;">Please wait a moment...</div>
+      `;
+      document.body.appendChild(banner);
+
+      try {
+        const resp = await fetch('/api/upload-and-run', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (resp.ok) {
+          const data = await resp.json();
+          banner.style.borderColor = '#10b981';
+          banner.innerHTML = `
+            <div style="display:flex; align-items:center; gap:12px; margin-bottom:8px;">
+              <span style="font-size:24px;">✅</span>
+              <strong style="font-size:16px; color:#10b981;">Processing Complete!</strong>
+            </div>
+            <div style="font-size:13px; color:#f8fafc; line-height:1.4;">
+              ${data.message}
+            </div>
+          `;
+          setTimeout(() => {
+            window.location.reload();
+          }, 1200);
+        } else {
+          const errText = await resp.text();
+          alert('Upload failed: ' + errText);
+          banner.remove();
+        }
+      } catch (err) {
+        console.error("Upload error:", err);
+        alert('Upload error: ' + err);
+        banner.remove();
+      }
     }
 
     async function triggerReconcile() {
