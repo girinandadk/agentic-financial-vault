@@ -60,17 +60,23 @@ def index(request: Request):
 
         # Lists
         top_flags = conn.execute("""
-            SELECT flag_id, reference_type, reference_id, severity, issue_type, description, status
-            FROM audit_flags
-            WHERE status = 'OPEN'
-            ORDER BY CASE severity WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'MEDIUM' THEN 3 ELSE 4 END, flag_id DESC
-            LIMIT 6
+            SELECT f.flag_id, f.reference_type, f.reference_id, f.severity, f.issue_type, f.description, f.status,
+                   COALESCE(i.raw_file_name, '') as raw_file_name,
+                   COALESCE(i.invoice_number, '') as invoice_number
+            FROM audit_flags f
+            LEFT JOIN invoices i ON f.reference_type = 'INVOICE' AND f.reference_id = i.invoice_id
+            WHERE f.status = 'OPEN'
+            ORDER BY CASE f.severity WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'MEDIUM' THEN 3 ELSE 4 END, f.flag_id DESC
+            LIMIT 8
         """).fetchall()
 
         all_flags = conn.execute("""
-            SELECT flag_id, reference_type, reference_id, severity, issue_type, description, status, created_at
-            FROM audit_flags
-            ORDER BY CASE severity WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'MEDIUM' THEN 3 ELSE 4 END, flag_id DESC
+            SELECT f.flag_id, f.reference_type, f.reference_id, f.severity, f.issue_type, f.description, f.status, f.created_at,
+                   COALESCE(i.raw_file_name, '') as raw_file_name,
+                   COALESCE(i.invoice_number, '') as invoice_number
+            FROM audit_flags f
+            LEFT JOIN invoices i ON f.reference_type = 'INVOICE' AND f.reference_id = i.invoice_id
+            ORDER BY CASE f.severity WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'MEDIUM' THEN 3 ELSE 4 END, f.flag_id DESC
         """).fetchall()
 
         reconciled_list = conn.execute("""
@@ -314,6 +320,48 @@ def preview_tally_voucher(invoice_id: int):
     
     xml_content = generate_tally_xml_from_voucher(voucher, inv_num)
     return HTMLResponse(content=f"<pre style='background:#0f172a; color:#38bdf8; padding:20px; border-radius:8px; font-family:monospace;'>{xml_content}</pre>")
+
+
+from config import PROCESSED_ARCHIVE_DIR, VAULT_DROP_DIR
+
+@app.get("/api/vault/view/{filename}")
+def view_vault_file(filename: str):
+    """Serves the raw document (PDF/PNG/JPG) directly from disk without database dependencies."""
+    # Search in processed_archive, vault_drop, and sample_test_files
+    candidate_dirs = [
+        PROCESSED_ARCHIVE_DIR,
+        VAULT_DROP_DIR,
+        Path.home() / "Downloads" / "finsentry_test_bills",
+        Path(__file__).parent / "sample_test_files"
+    ]
+
+    clean_name = Path(filename).name
+    target_path = None
+
+    for d in candidate_dirs:
+        exact = d / clean_name
+        if exact.exists():
+            target_path = exact
+            break
+        # Also check with prefix timestamps (e.g., 179448..._filename)
+        matches = list(d.glob(f"*{clean_name}*"))
+        if matches:
+            target_path = matches[0]
+            break
+
+    if not target_path or not target_path.exists():
+        raise HTTPException(status_code=404, detail="Document file not found on disk")
+
+    suffix = target_path.suffix.lower()
+    media_map = {
+        ".pdf": "application/pdf",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".csv": "text/plain"
+    }
+    media_type = media_map.get(suffix, "application/octet-stream")
+    return FileResponse(target_path, media_type=media_type)
 
 if __name__ == "__main__":
     import uvicorn
