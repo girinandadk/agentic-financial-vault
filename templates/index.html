@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FinSentry &bull; Local Autonomous Financial Audit Cockpit</title>
+  <style>
+    :root {
+      --bg: #090d16;
+      --surface: #131b2e;
+      --surface-hover: #1a243d;
+      --card: #162036;
+      --border: #223254;
+      --border-light: #2e4370;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --primary: #38bdf8;
+      --primary-hover: #0ea5e9;
+      --critical: #f43f5e;
+      --high: #f97316;
+      --medium: #eab308;
+      --success: #10b981;
+      --purple: #a855f7;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 0;
+      margin: 0;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+    }
+    
+    /* Layout */
+    .sidebar {
+      width: 280px;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+      display: flex;
+      flex-direction: column;
+      flex-shrink: 0;
+    }
+    .brand {
+      padding: 24px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .brand-icon {
+      width: 36px;
+      height: 36px;
+      background: linear-gradient(135deg, #0284c7, #38bdf8);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 900;
+      font-size: 20px;
+      color: white;
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.3);
+    }
+    .brand-title {
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: white;
+    }
+    .brand-sub {
+      font-size: 11px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .nav {
+      padding: 20px 12px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      overflow-y: auto;
+    }
+    .nav-btn {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 14px;
+      border-radius: 8px;
+      color: var(--text-muted);
+      background: transparent;
+      border: none;
+      cursor: pointer;
+      font-size: 14px;
+      font-weight: 600;
+      text-align: left;
+      transition: all 0.15s;
+    }
+    .nav-btn:hover, .nav-btn.active {
+      background: var(--surface-hover);
+      color: white;
+    }
+    .nav-btn.active {
+      border-left: 3px solid var(--primary);
+      background: rgba(56, 189, 248, 0.1);
+      color: var(--primary);
+    }
+    .nav-badge {
+      font-size: 11px;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-weight: 700;
+    }
+    .sidebar-footer {
+      padding: 16px;
+      border-top: 1px solid var(--border);
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .status-indicator {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      margin-right: 6px;
+      box-shadow: 0 0 8px var(--success);
+    }
+
+    .main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow-y: auto;
+      background: var(--bg);
+    }
+    .topbar {
+      height: 70px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 32px;
+      background: var(--surface);
+    }
+    .topbar-actions {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.15s;
+      text-decoration: none;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: #04101e;
+    }
+    .btn-primary:hover { background: var(--primary-hover); }
+    .btn-secondary {
+      background: var(--surface-hover);
+      border-color: var(--border);
+      color: var(--text);
+    }
+    .btn-secondary:hover { background: var(--card); border-color: var(--border-light); }
+    .btn-danger {
+      background: rgba(244, 63, 94, 0.15);
+      border-color: var(--critical);
+      color: var(--critical);
+    }
+    .btn-sm { padding: 4px 10px; font-size: 12px; }
+
+    .content {
+      padding: 32px;
+      max-width: 1400px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    /* Cards & Stats */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 20px;
+      margin-bottom: 28px;
+    }
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px;
+      position: relative;
+      overflow: hidden;
+    }
+    .stat-card::after {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 3px;
+    }
+    .stat-blue::after { background: var(--primary); }
+    .stat-red::after { background: var(--critical); }
+    .stat-orange::after { background: var(--high); }
+    .stat-green::after { background: var(--success); }
+    .stat-lbl { font-size: 12px; color: var(--text-muted); text-transform: uppercase; font-weight: 700; letter-spacing: 0.5px; }
+    .stat-val { font-size: 26px; font-weight: 800; margin: 8px 0 4px; }
+    .stat-sub { font-size: 12px; color: var(--text-muted); }
+
+    /* Tables */
+    .card-box {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      margin-bottom: 28px;
+      overflow: hidden;
+    }
+    .card-box-header {
+      padding: 18px 24px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .card-box-title {
+      font-size: 16px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; }
+    th {
+      background: rgba(10, 16, 29, 0.7);
+      padding: 12px 20px;
+      color: var(--text-muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1px solid var(--border);
+    }
+    td { padding: 14px 20px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--surface-hover); }
+
+    /* Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+    }
+    .badge-critical { background: rgba(244, 63, 94, 0.15); color: var(--critical); border: 1px solid rgba(244, 63, 94, 0.4); }
+    .badge-high { background: rgba(249, 115, 22, 0.15); color: var(--high); border: 1px solid rgba(249, 115, 22, 0.4); }
+    .badge-medium { background: rgba(234, 179, 8, 0.15); color: var(--medium); border: 1px solid rgba(234, 179, 8, 0.4); }
+    .badge-success { background: rgba(16, 185, 129, 0.15); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.4); }
+    .badge-neutral { background: rgba(148, 163, 184, 0.15); color: var(--text-muted); border: 1px solid var(--border); }
+
+    /* Upload zone */
+    .dropzone {
+      border: 2px dashed var(--border-light);
+      border-radius: 12px;
+      padding: 32px;
+      text-align: center;
+      background: rgba(19, 27, 46, 0.5);
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .dropzone:hover {
+      border-color: var(--primary);
+      background: rgba(56, 189, 248, 0.05);
+    }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+  </style>
+</head>
+<body>
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-icon">S</div>
+      <div>
+        <div class="brand-title">FinSentry</div>
+        <div class="brand-sub">Autonomous Audit Engine</div>
+      </div>
+    </div>
+
+    <div class="nav">
+      <button class="nav-btn active" onclick="switchTab('dashboard')">
+        <span>📊 Audit Dashboard</span>
+      </button>
+      <button class="nav-btn" onclick="switchTab('flags')">
+        <span>🚨 Forensic Flags</span>
+        <span class="nav-badge badge-critical" id="badge-flags-cnt">{{ open_flags_cnt }}</span>
+      </button>
+      <button class="nav-btn" onclick="switchTab('reconciliation')">
+        <span>⚖️ Reconciled Pairs</span>
+        <span class="nav-badge badge-success">{{ reconciled_cnt }}</span>
+      </button>
+      <button class="nav-btn" onclick="switchTab('unmatched')">
+        <span>⚠️ Unmatched Items</span>
+        <span class="nav-badge badge-medium">{{ unmatched_cnt }}</span>
+      </button>
+      <button class="nav-btn" onclick="switchTab('invoices')">
+        <span>🧾 Invoices Register</span>
+        <span class="nav-badge badge-neutral">{{ invoices_cnt }}</span>
+      </button>
+      <button class="nav-btn" onclick="switchTab('upload')">
+        <span>📥 Ingestion & Vault</span>
+      </button>
+    </div>
+
+    <div class="sidebar-footer">
+      <div style="margin-bottom: 6px;"><span class="status-indicator"></span><strong>Gemma 4:e4b</strong> (Local Ollama)</div>
+      <div style="font-size: 10px; color: var(--text-muted);">Vault Drop: <code>{{ vault_drop_dir }}</code></div>
+    </div>
+  </aside>
+
+  <!-- Main Content Area -->
+  <main class="main">
+    <!-- Topbar -->
+    <header class="topbar">
+      <div>
+        <h2 style="font-size: 18px; font-weight: 700;" id="page-title">Executive Audit Dashboard</h2>
+        <span style="font-size: 12px; color: var(--text-muted);">Continuous Forensic Reconciliation & Internal Controls</span>
+      </div>
+      <div class="topbar-actions">
+        <button class="btn btn-primary" onclick="triggerPipeline()">🤖 Run 2-Agent Audit & Tally</button>
+        <button class="btn btn-secondary" onclick="triggerReconcile()">
+          ⚡ Run Reconcile Cycle
+        </button>
+        <div style="display:flex; gap: 6px;">
+          <a href="/api/export/quickbooks" class="btn btn-secondary btn-sm" download>CSV (QuickBooks)</a>
+          <a href="/api/export/tally" class="btn btn-secondary btn-sm" download>XML (Tally)</a>
+          <a href="/api/export/report" target="_blank" class="btn btn-primary btn-sm">📄 View HTML Report</a>
+        </div>
+      </div>
+    </header>
+
+    <div class="content">
+
+      <!-- TAB: DASHBOARD -->
+      <section id="tab-dashboard" class="tab-content active">
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+          <div class="stat-card stat-blue">
+            <div class="stat-lbl">Reconciliation Rate</div>
+            <div class="stat-val" style="color: var(--primary);">{{ "%.1f"|format(reconciled_pct) }}%</div>
+            <div class="stat-sub">{{ reconciled_cnt }} of {{ total_txns_cnt }} bank debits verified</div>
+          </div>
+          <div class="stat-card stat-red">
+            <div class="stat-lbl">Active Forensic Flags</div>
+            <div class="stat-val" style="color: var(--critical);">{{ open_flags_cnt }}</div>
+            <div class="stat-sub">{{ critical_flags_cnt }} Critical (BEC / Duplicates)</div>
+          </div>
+          <div class="stat-card stat-green">
+            <div class="stat-lbl">Reconciled Debits</div>
+            <div class="stat-val" style="color: var(--success);">${{ "{:,.2f}".format(reconciled_amount) }}</div>
+            <div class="stat-sub">Fully matched against vendor invoices</div>
+          </div>
+          <div class="stat-card stat-orange">
+            <div class="stat-lbl">Unmatched Outflow</div>
+            <div class="stat-val" style="color: var(--high);">${{ "{:,.2f}".format(unmatched_amount) }}</div>
+            <div class="stat-sub">{{ unmatched_cnt }} transactions pending review</div>
+          </div>
+        </div>
+
+        <!-- Recent Critical Flags Preview -->
+        <div class="card-box">
+          <div class="card-box-header">
+            <div class="card-box-title">
+              <span>🚨 Critical & High Forensic Flags Requiring Auditor Attention</span>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="switchTab('flags')">View All Flags &rarr;</button>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Severity</th>
+                <th>Issue Type</th>
+                <th>Ref Target</th>
+                <th>Forensic Discovery</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for f in top_flags %}
+              <tr id="flag-row-{{ f.flag_id }}">
+                <td>
+                  <span class="badge {% if f.severity == 'CRITICAL' %}badge-critical{% elif f.severity == 'HIGH' %}badge-high{% else %}badge-medium{% endif %}">
+                    {{ f.severity }}
+                  </span>
+                </td>
+                <td style="font-weight: 600;">{{ f.issue_type }}</td>
+                <td>{{ f.reference_type }} #{{ f.reference_id }}</td>
+                <td style="max-width: 500px; color: #cbd5e1;">{{ f.description }}</td>
+                <td>
+                  <button class="btn btn-secondary btn-sm" onclick="updateFlagStatus({{ f.flag_id }}, 'RESOLVED')">Approve</button>
+                  <button class="btn btn-danger btn-sm" onclick="updateFlagStatus({{ f.flag_id }}, 'DISMISSED')">Dismiss</button>
+                </td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 30px;">
+                  ✨ No active flags detected. Internal controls healthy.
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB: FLAGS -->
+      <section id="tab-flags" class="tab-content">
+        <div class="card-box">
+          <div class="card-box-header">
+            <div class="card-box-title">
+              <span>🚨 All Forensic Audit Flags & Violations</span>
+              <span class="badge badge-critical">{{ open_flags_cnt }} Open</span>
+            </div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Severity</th>
+                <th>Issue Type</th>
+                <th>Reference</th>
+                <th>Description</th>
+                <th>Status</th>
+                <th>Tally Action</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for f in all_flags %}
+              <tr id="flag-detail-{{ f.flag_id }}">
+                <td>#{{ f.flag_id }}</td>
+                <td>
+                  <span class="badge {% if f.severity == 'CRITICAL' %}badge-critical{% elif f.severity == 'HIGH' %}badge-high{% else %}badge-medium{% endif %}">
+                    {{ f.severity }}
+                  </span>
+                </td>
+                <td style="font-weight: 600;">{{ f.issue_type }}</td>
+                <td>{{ f.reference_type }} #{{ f.reference_id }}</td>
+                <td style="color: #e2e8f0;">{{ f.description }}</td>
+                <td><span class="badge badge-neutral">{{ f.status }}</span></td>
+                <td>
+                  <div style="display: flex; gap: 4px;">
+                    <button class="btn btn-secondary btn-sm" onclick="updateFlagStatus({{ f.flag_id }}, 'RESOLVED')">Approve</button>
+                    <button class="btn btn-danger btn-sm" onclick="updateFlagStatus({{ f.flag_id }}, 'DISMISSED')">Dismiss</button>
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB: RECONCILIATION -->
+      <section id="tab-reconciliation" class="tab-content">
+        <div class="card-box">
+          <div class="card-box-header">
+            <div class="card-box-title">
+              <span>⚖️ Reconciled Transactions (Two-Tier Deterministic & Gemma 4 Match)</span>
+              <span class="badge badge-success">{{ reconciled_cnt }} Reconciled</span>
+            </div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Bank Date</th>
+                <th>Bank Narration</th>
+                <th>Debit Amount</th>
+                <th>Matched Vendor & Invoice</th>
+                <th>Invoice Date</th>
+                <th>Invoice Total</th>
+                <th>Confidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for m in reconciled_list %}
+              <tr>
+                <td>{{ m.txn_date }}</td>
+                <td><strong>{{ m.raw_narration }}</strong></td>
+                <td style="font-weight: 700; color: var(--success);">${{ "{:,.2f}".format(m.debit_amount) }}</td>
+                <td>
+                  <strong>{{ m.vendor_name }}</strong>
+                  <div style="font-size: 11px; color: var(--text-muted);">Inv #{{ m.invoice_number }}</div>
+                </td>
+                <td>{{ m.invoice_date }}</td>
+                <td>${{ "{:,.2f}".format(m.total_amount) }}</td>
+                <td>
+                  <span class="badge badge-success">{{ (m.match_confidence * 100)|round|int }}% MATCH</span>
+                </td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="7" style="text-align: center; color: var(--text-muted); padding: 40px;">
+                  No reconciled transactions found yet. Ingest invoices and bank statements to begin reconciliation.
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB: UNMATCHED -->
+      <section id="tab-unmatched" class="tab-content">
+        <div class="card-box">
+          <div class="card-box-header">
+            <div class="card-box-title">
+              <span>⚠️ Unmatched Bank Transactions & Invoices</span>
+            </div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>Txn ID</th>
+                <th>Date</th>
+                <th>Narration</th>
+                <th>Debit Amount</th>
+                <th>Status</th>
+                <th>Tally Action</th>
+                <th>Manual Reconciliation</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for u in unmatched_list %}
+              <tr>
+                <td>#{{ u.txn_id }}</td>
+                <td>{{ u.txn_date }}</td>
+                <td><strong>{{ u.raw_narration }}</strong></td>
+                <td style="font-weight: 700; color: var(--critical);">${{ "{:,.2f}".format(u.debit_amount) }}</td>
+                <td><span class="badge badge-medium">{{ u.status }}</span></td>
+                <td>
+                  <form onsubmit="manualMatch(event, {{ u.txn_id }})" style="display: flex; gap: 6px;">
+                    <select name="invoice_id" style="background: var(--card); color: white; border: 1px solid var(--border); padding: 4px 8px; border-radius: 4px; font-size: 12px;" required>
+                      <option value="">Select Open Invoice...</option>
+                      {% for inv in open_invoices_dropdown %}
+                      <option value="{{ inv.invoice_id }}">Inv #{{ inv.invoice_number }} - {{ inv.vendor_name }} (${{ "{:,.2f}".format(inv.total_amount) }})</option>
+                      {% endfor %}
+                    </select>
+                    <button type="submit" class="btn btn-primary btn-sm">Confirm Match</button>
+                  </form>
+                </td>
+              </tr>
+              {% else %}
+              <tr>
+                <td colspan="6" style="text-align: center; color: var(--text-muted); padding: 40px;">
+                  All bank transactions are fully matched! No pending items.
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB: INVOICES -->
+      <section id="tab-invoices" class="tab-content">
+        <div class="card-box">
+          <div class="card-box-header">
+            <div class="card-box-title">
+              <span>🧾 Ingested Vendor Invoices Register</span>
+              <span class="badge badge-neutral">{{ invoices_cnt }} Total</span>
+            </div>
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Vendor</th>
+                <th>Invoice #</th>
+                <th>Date</th>
+                <th>Subtotal</th>
+                <th>Tax</th>
+                <th>Total</th>
+                <th>Status</th>
+                <th>Tally Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for inv in all_invoices %}
+              <tr>
+                <td>#{{ inv.invoice_id }}</td>
+                <td><strong>{{ inv.vendor_name }}</strong></td>
+                <td><code>{{ inv.invoice_number }}</code></td>
+                <td>{{ inv.invoice_date }}</td>
+                <td>${{ "{:,.2f}".format(inv.subtotal) }}</td>
+                <td>${{ "{:,.2f}".format(inv.tax_amount) }}</td>
+                <td style="font-weight: 700;">${{ "{:,.2f}".format(inv.total_amount) }}</td>
+                <td>
+                  <span class="badge {% if inv.status in ['READY_FOR_TALLY', 'RECONCILED', 'VERIFIED_CLEAN'] %}badge-success{% elif inv.status == 'FLAGGED_ANOMALY' %}badge-critical{% else %}badge-medium{% endif %}">
+                    {{ inv.status }}
+                  </span>
+                </td>
+                <td>
+                  {% if inv.status in ['READY_FOR_TALLY', 'RECONCILED', 'VERIFIED_CLEAN'] %}
+                  <a href="/api/tally/preview/{{ inv.invoice_id }}" target="_blank" class="btn btn-secondary btn-sm" style="font-size:11px;">View Tally XML</a>
+                  {% else %}
+                  <span style="font-size:11px; color:var(--critical); font-weight:600;">Halted by Agent 1</span>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <!-- TAB: UPLOAD -->
+      <section id="tab-upload" class="tab-content">
+        <div class="card-box">
+          <div class="card-box-header">
+            <div class="card-box-title">
+              <span>📥 Ingest Documents into Vault Drop</span>
+            </div>
+          </div>
+          <div style="padding: 24px;">
+            <p style="color: var(--text-muted); font-size: 13px; margin-bottom: 20px;">
+              Files uploaded here are saved directly to <code>{{ vault_drop_dir }}</code>. The background file watcher will automatically hash (SHA-256), extract structured data via Gemma 4 / OCR, archive the original to <code>processed_archive</code>, and execute reconciliation.
+            </p>
+            <form action="/api/upload" method="post" enctype="multipart/form-data" class="dropzone" id="upload-form">
+              <input type="file" name="files" multiple style="display: none;" id="file-input" onchange="document.getElementById('upload-form').submit()">
+              <div onclick="document.getElementById('file-input').click()">
+                <div style="font-size: 32px; margin-bottom: 8px;">📁</div>
+                <div style="font-size: 15px; font-weight: 700; margin-bottom: 4px;">Click or Drag files to drop into Vault Drop</div>
+                <div style="font-size: 12px; color: var(--text-muted);">Supports PDF Invoices, Bank Statement CSVs, and Receipt Images (PNG, JPG)</div>
+              </div>
+            </form>
+          </div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <script>
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.nav-btn').forEach(el => el.classList.remove('active'));
+
+      const targetTab = document.getElementById('tab-' + tabId);
+      if (targetTab) targetTab.classList.add('active');
+
+      const btn = Array.from(document.querySelectorAll('.nav-btn')).find(b => b.getAttribute('onclick').includes(tabId));
+      if (btn) btn.classList.add('active');
+
+      const titles = {
+        dashboard: "Executive Audit Dashboard",
+        flags: "Forensic Audit Flags & Internal Controls",
+        reconciliation: "Two-Tier Reconciled Ledger",
+        unmatched: "Unmatched Bank Transactions & Discrepancies",
+        invoices: "Vendor Invoices Register",
+        upload: "Ingestion & Vault Drop Monitor"
+      };
+      document.getElementById('page-title').innerText = titles[tabId] || "FinSentry Audit";
+    }
+
+    async function triggerReconcile() {
+      try {
+        const resp = await fetch('/api/reconcile', { method: 'POST' });
+        const data = await resp.json();
+        alert('Reconciliation cycle triggered! Refreshing cockpit...');
+        window.location.reload();
+      } catch (e) {
+        alert('Error triggering reconciliation: ' + e);
+      }
+    }
+
+    async function updateFlagStatus(flagId, status) {
+      try {
+        const resp = await fetch(`/api/flags/${flagId}/status?status=${status}`, { method: 'POST' });
+        if (resp.ok) {
+          const row1 = document.getElementById(`flag-row-${flagId}`);
+          if (row1) row1.remove();
+          const row2 = document.getElementById(`flag-detail-${flagId}`);
+          if (row2) row2.remove();
+          // Decrement badge count
+          const badge = document.getElementById('badge-flags-cnt');
+          if (badge) {
+            let cnt = parseInt(badge.innerText) || 0;
+            if (cnt > 0) badge.innerText = cnt - 1;
+          }
+        } else {
+          alert('Failed to update flag');
+        }
+      } catch (e) {
+        alert('Network error: ' + e);
+      }
+    }
+
+    async function manualMatch(event, txnId) {
+      event.preventDefault();
+      const form = event.target;
+      const invoiceId = form.invoice_id.value;
+      if (!invoiceId) return;
+
+      try {
+        const resp = await fetch('/api/manual-match', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ txn_id: txnId, invoice_id: parseInt(invoiceId) })
+        });
+        if (resp.ok) {
+          alert('Matched successfully!');
+          window.location.reload();
+        } else {
+          alert('Failed to match transaction');
+        }
+      } catch (e) {
+        alert('Error during manual match: ' + e);
+      }
+    }
+  </script>
+</body>
+</html>

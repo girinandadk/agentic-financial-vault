@@ -1,0 +1,32 @@
+# Environment & Secrets (NEVER COMMIT)
+.env
+*.env
+.env.*
+!.env.example
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# FinSentry Dynamic Vault & Output Data
+vault_drop/*
+!vault_drop/.gitkeep
+vault_output/finsentry.db*
+vault_output/processed_archive/*
+!vault_output/processed_archive/.gitkeep
+vault_output/exports/*
+!vault_output/exports/.gitkeep
+vault_output/reports/*
+!vault_output/reports/.gitkeep
+
+# OS Artifacts
+.DS_Store
+Thumbs.db
