@@ -11,7 +11,7 @@ from typing import List, Optional
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi import FastAPI, UploadFile, File, Request, Form, Query, HTTPException
-from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse, JSONResponse
+from fastapi.responses import HTMLResponse, FileResponse, RedirectResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
@@ -149,6 +149,57 @@ async def upload_files(files: List[UploadFile] = File(...), run_agents: bool = Q
 
 
 import threading
+
+import json
+import asyncio
+
+@app.post("/api/upload-stream")
+async def upload_stream(files: List[UploadFile] = File(...)):
+    """Server-Sent Events endpoint that yields live real-time progress steps as the agents execute."""
+    async def event_generator():
+        yield f"data: {json.dumps({'step': 1, 'percent': 15, 'stage': 'INGESTION', 'msg': 'Saving & hashing uploaded bill...', 'detail': f'Received {len(files)} file(s)'})}\n\n"
+        await asyncio.sleep(0.1)
+
+        saved_paths = []
+        for file in files:
+            target_path = VAULT_DROP_DIR / file.filename
+            with open(target_path, "wb") as buffer:
+                shutil.copyfileobj(file.file, buffer)
+            saved_paths.append(target_path)
+            
+        yield f"data: {json.dumps({'step': 2, 'percent': 35, 'stage': 'EXTRACTION', 'msg': 'Multimodal LLM / OCR extracting bill fields...', 'detail': f'{files[0].filename}'})}\n\n"
+        await asyncio.sleep(0.1)
+
+        # Ingest and extract
+        for path in saved_paths:
+            process_dropped_file(path)
+
+        yield f"data: {json.dumps({'step': 3, 'percent': 65, 'stage': 'AGENT_1_AUDIT', 'msg': 'Agent 1 checking arithmetic, BEC fraud, & duplicates...', 'detail': 'Verifying subtotal + tax = total'})}\n\n"
+        await asyncio.sleep(0.1)
+
+        # Run Two-Agent audit on the newest pending bill only
+        run_two_agent_pipeline(only_new_pending=True)
+
+        yield f"data: {json.dumps({'step': 4, 'percent': 85, 'stage': 'AGENT_2_TALLY', 'msg': 'Agent 2 formulating categorized Tally XML voucher...', 'detail': 'Ledger categorization & XML generation'})}\n\n"
+        await asyncio.sleep(0.1)
+
+        run_reconciliation()
+
+        # Query latest invoice
+        with get_db() as conn:
+            inv = conn.execute("""
+                SELECT i.invoice_id, i.invoice_number, i.invoice_date, i.subtotal, i.tax_amount, i.total_amount, i.status, 
+                       v.name as vendor_name, i.raw_file_name
+                FROM invoices i
+                LEFT JOIN vendors v ON i.vendor_id = v.vendor_id
+                ORDER BY i.invoice_id DESC
+                LIMIT 1
+            """).fetchone()
+
+        inv_data = dict(inv) if inv else None
+        yield f"data: {json.dumps({'step': 5, 'percent': 100, 'stage': 'COMPLETE', 'msg': 'Audit & Tally compilation complete!', 'invoice': inv_data})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 @app.post("/api/upload-and-run")
 async def upload_and_run(files: List[UploadFile] = File(...)):

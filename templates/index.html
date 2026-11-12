@@ -692,7 +692,7 @@
       document.getElementById('page-title').innerText = titles[tabId] || "FinSentry Audit";
     }
 
-        async function handleDirectUpload(inputElement) {
+            async function handleDirectUpload(inputElement) {
       const files = inputElement.files;
       if (!files || files.length === 0) return;
 
@@ -701,95 +701,174 @@
         formData.append('files', files[i]);
       }
 
-      // Show immediate modal popup in center
+      // Show live streaming modal with interactive progress bar
       const banner = document.createElement('div');
       banner.id = 'active-upload-modal';
-      banner.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:999999; background:#0f172a; color:#38bdf8; border:2px solid #38bdf8; padding:24px 28px; border-radius:14px; box-shadow:0 20px 60px rgba(0,0,0,0.9); font-family:-apple-system,BlinkMacSystemFont,sans-serif; min-width:380px; max-width:480px; text-align:left;';
+      banner.style.cssText = 'position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); z-index:999999; background:#0f172a; color:#f8fafc; border:2px solid #38bdf8; padding:24px 28px; border-radius:16px; box-shadow:0 25px 70px rgba(0,0,0,0.95); font-family:-apple-system,BlinkMacSystemFont,sans-serif; width:90%; max-width:540px; text-align:left;';
       banner.innerHTML = `
-        <div style="display:flex; align-items:center; gap:12px; margin-bottom:12px;">
-          <span style="font-size:28px;">🤖</span>
-          <div>
-            <strong style="font-size:17px; color:#ffffff; display:block;">Autonomous Agents at Work...</strong>
-            <span style="font-size:12px; color:#94a3b8;">FinSentry Auditing & Tally Pipeline</span>
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <span style="font-size:28px;">⚡</span>
+            <div>
+              <strong style="font-size:17px; color:#ffffff; display:block;">Autonomous Agents Pipeline</strong>
+              <span style="font-size:12px; color:#94a3b8;">FinSentry Real-Time Audit Engine</span>
+            </div>
+          </div>
+          <span id="progress-percent" style="font-size:18px; font-weight:800; color:#38bdf8;">10%</span>
+        </div>
+
+        <!-- Animated Progress Bar -->
+        <div style="width:100%; height:8px; background:#1e293b; border-radius:9999px; overflow:hidden; margin-bottom:16px; border:1px solid #334155;">
+          <div id="progress-bar-fill" style="width:10%; height:100%; background:linear-gradient(90deg, #0284c7, #38bdf8); transition:width 0.4s ease; border-radius:9999px;"></div>
+        </div>
+
+        <!-- Live Step Stage Box -->
+        <div id="progress-stage-box" style="background:#1e293b; border:1px solid #334155; padding:14px; border-radius:10px; margin-bottom:14px;">
+          <div id="progress-step-msg" style="font-size:14px; font-weight:700; color:#ffffff; margin-bottom:4px;">
+            Ingesting & Hashing Bill...
+          </div>
+          <div id="progress-step-detail" style="font-size:12px; color:#94a3b8;">
+            Preparing ${files[0].name} for extraction
           </div>
         </div>
-        <div style="background:#1e293b; border:1px solid #334155; padding:12px; border-radius:8px; font-size:13px; color:#cbd5e1; line-height:1.5; margin-bottom:12px;">
-          Uploading <strong style="color:#38bdf8;">${files[0].name}</strong><br>
-          1. Multimodal OCR & LLM Extraction<br>
-          2. Agent 1: Forensic Audit & Anomaly Detection<br>
-          3. Agent 2: Tally Ledger & XML Generation
-        </div>
-        <div style="font-size:12px; color:#94a3b8; display:flex; align-items:center; gap:8px;">
-          <span class="status-indicator"></span> Running inference... please hold on.
+
+        <!-- Visual Step Tracker -->
+        <div style="display:flex; justify-content:space-between; font-size:11px; color:#64748b; font-weight:600; text-transform:uppercase;">
+          <span id="step-lbl-1" style="color:#38bdf8;">1. Ingest</span>
+          <span id="step-lbl-2">2. Vision/OCR</span>
+          <span id="step-lbl-3">3. Agent 1 Audit</span>
+          <span id="step-lbl-4">4. Agent 2 Tally</span>
         </div>
       `;
       document.body.appendChild(banner);
 
       try {
-        // Upload with relative path and proper headers
-        const resp = await fetch('/api/upload-and-run', {
+        const resp = await fetch('/api/upload-stream', {
           method: 'POST',
           body: formData
         });
 
-        if (resp.ok) {
-          const data = await resp.json();
-          banner.style.borderColor = '#10b981';
-          banner.style.maxWidth = '640px';
-          
-          let invHtml = '';
-          if (data.invoices && data.invoices.length > 0) {
-            const inv = data.invoices[0];
-            const isClean = inv.status === 'READY_FOR_TALLY' || inv.status === 'VERIFIED_CLEAN';
-            const statusColor = isClean ? '#10b981' : '#f43f5e';
-            const statusLabel = isClean ? 'VERIFIED & CONVERTED' : 'ANOMALY DETECTED';
-            
-            invHtml = `
-              <div style="background:#1e293b; border:1px solid #334155; border-radius:10px; padding:16px; margin:16px 0; text-align:left;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-                  <strong style="color:#ffffff; font-size:16px;">${inv.vendor_name || 'Vendor'}</strong>
-                  <span style="background:${isClean ? 'rgba(16,185,129,0.2)' : 'rgba(244,63,94,0.2)'}; color:${statusColor}; border:1px solid ${statusColor}; padding:3px 10px; border-radius:9999px; font-size:11px; font-weight:800;">
-                    ${statusLabel}
-                  </span>
-                </div>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:13px; color:#cbd5e1; margin-bottom:12px;">
-                  <div><strong>Invoice #:</strong> ${inv.invoice_number}</div>
-                  <div><strong>Invoice Date:</strong> ${inv.invoice_date || 'N/A'}</div>
-                  <div><strong>Subtotal:</strong> $${Number(inv.subtotal).toLocaleString(undefined, {minimumFractionDigits:2})}</div>
-                  <div><strong>Tax:</strong> $${Number(inv.tax_amount).toLocaleString(undefined, {minimumFractionDigits:2})}</div>
-                  <div style="grid-column:1/-1; font-size:15px; font-weight:700; color:#38bdf8;">
-                    Total Due: $${Number(inv.total_amount).toLocaleString(undefined, {minimumFractionDigits:2})}
-                  </div>
-                </div>
-                <div style="display:flex; gap:10px; align-items:center; margin-top:12px; border-top:1px solid #334155; padding-top:12px;">
-                  ${isClean 
-                    ? `<a href="/api/tally/preview/${inv.invoice_id}" target="_blank" class="btn btn-primary btn-sm" style="text-decoration:none;">📄 View Tally XML Voucher</a>`
-                    : `<span style="color:#f43f5e; font-size:12px; font-weight:600;">⚠️ Halted by Agent 1 (Check Forensic Flags tab)</span>`
-                  }
-                  <button type="button" class="btn btn-secondary btn-sm" onclick="window.location.reload()">Refresh Cockpit</button>
-                </div>
-              </div>
-            `;
-          }
+        if (!resp.ok) {
+          throw new Error('Streaming connection failed with HTTP ' + resp.status);
+        }
 
-          banner.innerHTML = `
-            <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-              <div style="display:flex; align-items:center; gap:10px;">
-                <span style="font-size:26px;">🎯</span>
-                <strong style="font-size:18px; color:#ffffff;">Agent 1 & Agent 2 Results</strong>
-              </div>
-              <button onclick="document.getElementById('active-upload-modal').remove(); window.location.reload();" style="background:transparent; border:none; color:#94a3b8; font-size:20px; cursor:pointer;">&times;</button>
-            </div>
-            ${invHtml}
-          `;
-        } else {
-          // Fallback to standard form upload if AJAX is blocked
-          console.warn("AJAX failed, falling back to standard POST /api/upload");
-          submitStandardForm(files);
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop(); // keep last incomplete chunk
+
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const eventData = JSON.parse(line.slice(6));
+                updateProgressUI(banner, eventData);
+              } catch (e) {
+                console.error("JSON parse error on SSE line:", e, line);
+              }
+            }
+          }
         }
       } catch (err) {
-        console.warn("Fetch failed, triggering standard POST upload fallback:", err);
-        submitStandardForm(files);
+        console.warn("SSE stream interrupted, falling back to /api/upload-and-run:", err);
+        // Fallback to direct upload-and-run
+        fallbackDirectUpload(formData, banner);
+      }
+    }
+
+    function updateProgressUI(banner, data) {
+      const pFill = document.getElementById('progress-bar-fill');
+      const pPercent = document.getElementById('progress-percent');
+      const pMsg = document.getElementById('progress-step-msg');
+      const pDetail = document.getElementById('progress-step-detail');
+
+      if (pFill && data.percent) pFill.style.width = data.percent + '%';
+      if (pPercent && data.percent) pPercent.innerText = data.percent + '%';
+      if (pMsg && data.msg) pMsg.innerText = data.msg;
+      if (pDetail && data.detail) pDetail.innerText = data.detail;
+
+      // Update active step labels
+      if (data.step >= 1) document.getElementById('step-lbl-1').style.color = '#10b981';
+      if (data.step >= 2) document.getElementById('step-lbl-2').style.color = '#38bdf8';
+      if (data.step >= 3) {
+        document.getElementById('step-lbl-2').style.color = '#10b981';
+        document.getElementById('step-lbl-3').style.color = '#38bdf8';
+      }
+      if (data.step >= 4) {
+        document.getElementById('step-lbl-3').style.color = '#10b981';
+        document.getElementById('step-lbl-4').style.color = '#38bdf8';
+      }
+
+      // Final completion screen
+      if (data.stage === 'COMPLETE' && data.invoice) {
+        renderFinalInvoiceResult(banner, data.invoice);
+      }
+    }
+
+    function renderFinalInvoiceResult(banner, inv) {
+      banner.style.borderColor = '#10b981';
+      banner.style.maxWidth = '640px';
+      
+      const isClean = inv.status === 'READY_FOR_TALLY' || inv.status === 'VERIFIED_CLEAN';
+      const statusColor = isClean ? '#10b981' : '#f43f5e';
+      const statusLabel = isClean ? 'VERIFIED & CONVERTED' : 'ANOMALY DETECTED';
+
+      banner.innerHTML = `
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span style="font-size:26px;">🎯</span>
+            <strong style="font-size:18px; color:#ffffff;">Agent 1 & Agent 2 Execution Complete</strong>
+          </div>
+          <button onclick="document.getElementById('active-upload-modal').remove(); window.location.reload();" style="background:transparent; border:none; color:#94a3b8; font-size:22px; cursor:pointer;">&times;</button>
+        </div>
+
+        <div style="background:#1e293b; border:1px solid #334155; border-radius:10px; padding:16px; margin:14px 0; text-align:left;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <strong style="color:#ffffff; font-size:16px;">${inv.vendor_name || 'Vendor'}</strong>
+            <span style="background:${isClean ? 'rgba(16,185,129,0.2)' : 'rgba(244,63,94,0.2)'}; color:${statusColor}; border:1px solid ${statusColor}; padding:3px 10px; border-radius:9999px; font-size:11px; font-weight:800;">
+              ${statusLabel}
+            </span>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:13px; color:#cbd5e1; margin-bottom:12px;">
+            <div><strong>Invoice #:</strong> ${inv.invoice_number}</div>
+            <div><strong>Invoice Date:</strong> ${inv.invoice_date || 'N/A'}</div>
+            <div><strong>Subtotal:</strong> $${Number(inv.subtotal).toLocaleString(undefined, {minimumFractionDigits:2})}</div>
+            <div><strong>Tax:</strong> $${Number(inv.tax_amount).toLocaleString(undefined, {minimumFractionDigits:2})}</div>
+            <div style="grid-column:1/-1; font-size:15px; font-weight:700; color:#38bdf8;">
+              Total Due: $${Number(inv.total_amount).toLocaleString(undefined, {minimumFractionDigits:2})}
+            </div>
+          </div>
+          <div style="display:flex; gap:10px; align-items:center; margin-top:12px; border-top:1px solid #334155; padding-top:12px;">
+            ${isClean 
+              ? `<a href="/api/tally/preview/${inv.invoice_id}" target="_blank" class="btn btn-primary btn-sm" style="text-decoration:none;">📄 View Tally XML Voucher</a>`
+              : `<span style="color:#f43f5e; font-size:12px; font-weight:600;">⚠️ Halted by Agent 1 (Check Forensic Flags tab)</span>`
+            }
+            <button type="button" class="btn btn-secondary btn-sm" onclick="window.location.reload()">Refresh Cockpit</button>
+          </div>
+        </div>
+      `;
+    }
+
+    async function fallbackDirectUpload(formData, banner) {
+      try {
+        const resp = await fetch('/api/upload-and-run', { method: 'POST', body: formData });
+        if (resp.ok) {
+          const data = await resp.json();
+          if (data.invoices && data.invoices.length > 0) {
+            renderFinalInvoiceResult(banner, data.invoices[0]);
+          } else {
+            window.location.reload();
+          }
+        }
+      } catch (e) {
+        alert('Upload failed: ' + e);
+        banner.remove();
       }
     }
 
