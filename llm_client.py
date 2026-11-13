@@ -56,8 +56,10 @@ def clean_markdown_json(text: str) -> str:
 
 def call_groq_vision(prompt: str, image_b64: str, mime_type: str = "image/jpeg", json_schema: Optional[dict] = None) -> Optional[str]:
     """Calls Groq OpenAI-compatible Vision API (qwen/qwen3.8-27b) for bill extraction."""
+    load_dotenv(override=True)
     api_key = os.getenv("GROQ_API_KEY", GROQ_API_KEY).strip()
     if not api_key or api_key == "your_groq_api_key_here":
+        logger.error("GROQ_API_KEY is missing or not configured in .env.")
         return None
 
     content = [
@@ -267,10 +269,7 @@ def generate_structured_output(
         import base64
         image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
-    # For Vision / Image OCR:
-    # 1. Try Groq Vision (qwen/qwen3.8-27b) if GROQ_API_KEY is configured
-    # 2. Fallback to Gemini Vision
-    # 3. Fallback to local LM Studio Gemma 4 / Ollama
+    # For Vision / Image OCR: Groq Vision (qwen/qwen3.8-27b) ONLY — no fallbacks.
     if image_bytes or image_b64:
         if image_b64:
             groq_out = call_groq_vision(prompt, image_b64=image_b64, mime_type=mime_type, json_schema=json_schema)
@@ -280,16 +279,9 @@ def generate_structured_output(
                     return schema_cls.model_validate_json(cleaned)
                 except Exception as e:
                     logger.warning(f"Failed to validate Groq Vision output against {schema_cls.__name__}: {e}")
+        return None
 
-        gemini_out = call_gemini_api(prompt, image_bytes=image_bytes, mime_type=mime_type, response_schema=schema_cls)
-        if gemini_out:
-            try:
-                cleaned = clean_markdown_json(gemini_out)
-                return schema_cls.model_validate_json(cleaned)
-            except Exception as e:
-                logger.warning(f"Failed to validate Gemini Vision output against {schema_cls.__name__}: {e}")
-
-    # Step 1 (Text) / Fallback (Vision): Local LM Studio (Gemma 4 e4b MLX 4bit)
+    # Step 1 (Text): Local LM Studio (Gemma 4 e4b MLX 4bit)
     lmstudio_out = call_local_lmstudio(prompt, image_b64=image_b64, mime_type=mime_type, json_schema=json_schema)
     if lmstudio_out:
         try:
