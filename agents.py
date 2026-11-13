@@ -66,8 +66,12 @@ def run_agent1_forensic_audit(invoice_id: int) -> Agent1AuditResult:
     """
     with get_db() as conn:
         inv_row = conn.execute("""
-            SELECT i.invoice_id, i.invoice_number, i.invoice_date, i.due_date, i.subtotal, i.tax_amount, 
-                   i.total_amount, i.raw_file_name, i.status, i.vendor_id,
+            SELECT i.invoice_id, i.invoice_number, i.invoice_date, i.due_date, i.subtotal, 
+                   COALESCE(i.discount_amount, 0.0) as discount_amount,
+                   COALESCE(i.cgst_amount, 0.0) as cgst_amount,
+                   COALESCE(i.sgst_amount, 0.0) as sgst_amount,
+                   COALESCE(i.igst_amount, 0.0) as igst_amount,
+                   i.tax_amount, i.total_amount, i.raw_file_name, i.status, i.vendor_id,
                    v.name as vendor_name, v.tax_id, v.bank_account_hash
             FROM invoices i
             LEFT JOIN vendors v ON i.vendor_id = v.vendor_id
@@ -91,6 +95,10 @@ def run_agent1_forensic_audit(invoice_id: int) -> Agent1AuditResult:
     account_manipulation = False
 
     sub = float(inv["subtotal"])
+    discount = float(inv.get("discount_amount") or 0.0)
+    cgst = float(inv.get("cgst_amount") or 0.0)
+    sgst = float(inv.get("sgst_amount") or 0.0)
+    igst = float(inv.get("igst_amount") or 0.0)
     tax = float(inv["tax_amount"])
     tot = float(inv["total_amount"])
 
@@ -100,10 +108,16 @@ def run_agent1_forensic_audit(invoice_id: int) -> Agent1AuditResult:
         severity = "CRITICAL"
         arithmetic_valid = False
 
-    # 2. Arithmetic verification
-    expected_tot = round(sub + tax, 2)
+    # 2. GST Tax Breakdown & Final Amount Arithmetic verification
+    gst_sum = round(cgst + sgst + igst, 2)
+    if gst_sum > 0 and abs(gst_sum - tax) > 0.05:
+        issues.append(f"GST breakdown mismatch: CGST (${cgst:,.2f}) + SGST (${sgst:,.2f}) + IGST (${igst:,.2f}) = ${gst_sum:,.2f}, but Total Tax is ${tax:,.2f}")
+        severity = "HIGH" if severity != "CRITICAL" else "CRITICAL"
+        arithmetic_valid = False
+
+    expected_tot = round(sub - discount + tax, 2)
     if tot > 0 and abs(expected_tot - tot) > 0.05:
-        issues.append(f"Arithmetic corruption: Subtotal (${sub:,.2f}) + Tax (${tax:,.2f}) = ${expected_tot:,.2f}, but Total is ${tot:,.2f}")
+        issues.append(f"Arithmetic corruption: Subtotal (${sub:,.2f}) - Discount (${discount:,.2f}) + Tax (${tax:,.2f}) = ${expected_tot:,.2f}, but Final Total is ${tot:,.2f}")
         severity = "HIGH" if severity != "CRITICAL" else "CRITICAL"
         arithmetic_valid = False
 

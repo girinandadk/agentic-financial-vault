@@ -69,6 +69,10 @@ def init_db():
             invoice_date DATE,
             due_date DATE,
             subtotal REAL NOT NULL DEFAULT 0.0,
+            discount_amount REAL NOT NULL DEFAULT 0.0,
+            cgst_amount REAL NOT NULL DEFAULT 0.0,
+            sgst_amount REAL NOT NULL DEFAULT 0.0,
+            igst_amount REAL NOT NULL DEFAULT 0.0,
             tax_amount REAL NOT NULL DEFAULT 0.0,
             total_amount REAL NOT NULL,
             raw_file_name TEXT,
@@ -106,10 +110,17 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_audit_status ON audit_flags(status);
         """)
         # Safe migration for existing databases
-        try:
-            conn.execute("ALTER TABLE invoices ADD COLUMN due_date DATE;")
-        except sqlite3.OperationalError:
-            pass
+        for col_sql in [
+            "ALTER TABLE invoices ADD COLUMN due_date DATE;",
+            "ALTER TABLE invoices ADD COLUMN discount_amount REAL NOT NULL DEFAULT 0.0;",
+            "ALTER TABLE invoices ADD COLUMN cgst_amount REAL NOT NULL DEFAULT 0.0;",
+            "ALTER TABLE invoices ADD COLUMN sgst_amount REAL NOT NULL DEFAULT 0.0;",
+            "ALTER TABLE invoices ADD COLUMN igst_amount REAL NOT NULL DEFAULT 0.0;",
+        ]:
+            try:
+                conn.execute(col_sql)
+            except sqlite3.OperationalError:
+                pass
 
 if __name__ == "__main__":
     init_db()
