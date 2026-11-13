@@ -910,25 +910,26 @@
             </div>
             <div id="auto-refresh-countdown" style="font-size:12px; color:#38bdf8; font-weight:600; display:flex; align-items:center; gap:6px;">
               <span class="status-indicator" style="animation: pulse 0.8s infinite;"></span>
-              Auto-updating cockpit in <span id="refresh-secs">4</span>s...
+              Auto-updating cockpit in <span id="refresh-secs">3</span>s...
             </div>
           </div>
         </div>
       `;
 
       // Automatically refresh the cockpit after showing final audit result
-      let countdown = 4;
+      if (window._finsentryRefreshTimer) clearInterval(window._finsentryRefreshTimer);
+      let countdown = 3;
       const cdEl = document.getElementById('refresh-secs');
-      const timer = setInterval(() => {
+      if (cdEl) cdEl.innerText = countdown;
+      window._finsentryRefreshTimer = setInterval(() => {
         countdown--;
-        if (cdEl) cdEl.innerText = countdown;
+        if (cdEl) cdEl.innerText = Math.max(0, countdown);
         if (countdown <= 0) {
-          clearInterval(timer);
-          // If invoice had anomaly, redirect to flags tab on refresh
+          clearInterval(window._finsentryRefreshTimer);
           if (!isClean) {
             localStorage.setItem('finsentry_active_tab', 'flags');
           }
-          window.location.reload();
+          window.location.href = window.location.pathname + '?t=' + Date.now();
         }
       }, 1000);
     }
