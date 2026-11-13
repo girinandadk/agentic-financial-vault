@@ -208,7 +208,18 @@ def generate_structured_output(
         import base64
         image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
-    # Step 1: Local LM Studio (Gemma 4 e4b MLX 4bit)
+    # For Vision / Image OCR: prefer Gemini Vision first for high-accuracy number/handwriting/table OCR,
+    # then fall back to local LM Studio Gemma 4 if Gemini is unavailable.
+    if image_bytes or image_b64:
+        gemini_out = call_gemini_api(prompt, image_bytes=image_bytes, mime_type=mime_type, response_schema=schema_cls)
+        if gemini_out:
+            try:
+                cleaned = clean_markdown_json(gemini_out)
+                return schema_cls.model_validate_json(cleaned)
+            except Exception as e:
+                logger.warning(f"Failed to validate Gemini Vision output against {schema_cls.__name__}: {e}")
+
+    # Step 1 (Text) / Fallback (Vision): Local LM Studio (Gemma 4 e4b MLX 4bit)
     lmstudio_out = call_local_lmstudio(prompt, image_b64=image_b64, mime_type=mime_type, json_schema=json_schema)
     if lmstudio_out:
         try:
