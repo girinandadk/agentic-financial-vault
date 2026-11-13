@@ -5,6 +5,7 @@ Deduplicates via SHA-256 hash, archives processed files to ./vault_output/proces
 extracts data, stores in DB, and triggers reconciliation.
 """
 import time
+import fcntl
 import shutil
 import hashlib
 import logging
@@ -52,7 +53,24 @@ def wait_for_file_stability(file_path: Path, checks: int = 3, interval: float = 
 
 
 def process_dropped_file(file_path: Path):
-    """Processes an individual file from vault_drop."""
+    """Processes an individual file from vault_drop with an inter-process lock to prevent duplicate ingestion."""
+    if not file_path.is_file() or file_path.name.startswith("."):
+        return
+
+    name_hash = hashlib.sha256(file_path.name.encode("utf-8")).hexdigest()[:16]
+    lock_path = Path(f"/tmp/finsentry_ingest_{name_hash}.lock")
+    with open(lock_path, "w") as lock_f:
+        fcntl.flock(lock_f, fcntl.LOCK_EX)
+        try:
+            if not file_path.is_file():
+                return
+            _process_dropped_file_locked(file_path)
+        finally:
+            fcntl.flock(lock_f, fcntl.LOCK_UN)
+
+
+def _process_dropped_file_locked(file_path: Path):
+    """Locked implementation of process_dropped_file."""
     if not file_path.is_file() or file_path.name.startswith("."):
         return
 
