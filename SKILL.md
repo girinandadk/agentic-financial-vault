@@ -1,31 +1,50 @@
-# FinSentry Agent Skills & Capabilities
+---
+name: finsentry-audit-engine
+description: Operate, maintain, and extend FinSentry — the local autonomous corporate financial auditing, bill extraction, forensic anomaly detection, and Tally/QuickBooks reconciliation engine. Use when starting/stopping the FinSentry server, auditing bills, debugging extraction/reconciliation, or exporting accounting data.
+---
 
-## 1. Multimodal Bill & Document Extraction (`extractor.py`, `llm_client.py`)
-- **Image / Scanned Bill OCR**: Exclusively uses **Groq Vision (`qwen/qwen3.8-27b`)** via `GROQ_API_KEY` in `.env` (no fallback) to extract structured Pydantic fields:
-  - `vendor_name`, `tax_id`, `invoice_number`, `invoice_date`, `due_date`
-  - `subtotal`, `discount_amount`, `cgst_amount`, `sgst_amount`, `igst_amount`, `tax_amount`, `total_amount`
-  - `category`, `bank_account_last4`
-- **Digital PDF & Bank CSV Parsing**: Uses `pdfplumber` and `pypdf` for digital PDFs and CSV bank statements.
+# FinSentry Autonomous Financial Audit Skill
 
-## 2. Agent 1: Forensic Value & Anomaly Auditor (`agents.py`)
-Audits every ingested invoice before ledger promotion:
-- **Zero / Corrupted Value Check**: Flags `total_amount <= 0.0` (`CRITICAL`).
-- **GST Breakdown Verification**: Verifies `CGST + SGST + IGST == tax_amount` (`HIGH`).
-- **Final Amount Arithmetic Check**: Verifies `subtotal - discount_amount + tax_amount == total_amount` (`HIGH`).
-- **Date Logic Check**: Flags `due_date < invoice_date` (`HIGH`).
-- **Duplicate & Near-Duplicate Detection**: Checks exact and fuzzy invoice number collisions (`CRITICAL`).
-- **BEC Fraud Detection**: Compares vendor `bank_account_hash` against historical records (`CRITICAL`).
-- **Auditor Override**: Approving a flag (`RESOLVED`) in the cockpit promotes the invoice to `READY_FOR_TALLY`.
+## When to Use
+Use this skill whenever the user asks to:
+- Start, stop, or restart the FinSentry cockpit server (`http://127.0.0.1:8000`).
+- Upload, extract, audit, or reconcile vendor bills, receipts, or bank statements.
+- Debug vision OCR extraction, Agent 1 forensic flags, Agent 2 Tally XML generation, or QuickBooks CSV exports.
 
-## 3. Agent 2: Tally Accounting & Voucher Specialist (`agents.py`)
-- Categorizes verified clean bills (`VERIFIED_CLEAN` / `READY_FOR_TALLY`) into Tally ERP / Prime XML vouchers with expense ledgers, input tax ledgers, and balanced debit/credit entries.
+## Environment & Prerequisites
+- **Python Environment**: `.venv/bin/python3`
+- **Configuration (`.env`)**:
+  - `GROQ_API_KEY`: Required for image/scanned bill extraction (**Groq Vision `qwen/qwen3.8-27b` ONLY**, no fallbacks).
+  - `LMSTUDIO_HOST` / `LMSTUDIO_MODEL`: Local text inference (`http://127.0.0.1:1234/v1`, `google/gemma-4-e4b`).
+- **Directories**:
+  - `./vault_drop`: Hot folder monitored by `watcher.py`.
+  - `./vault_output`: SQLite database (`finsentry.db`), archived files (`processed_archive/`), and exports (`exports/`).
 
-## 4. Two-Tier Hybrid Reconciliation (`reconciler.py`)
-- **Tier 1 (Deterministic)**: Matches open invoices to bank debits using `±0.05` amount tolerance, `-5` to `+30` day window, and `rapidfuzz >= 88` vendor similarity.
-- **Tier 2 (LLM Entity Resolution)**: Uses local **LM Studio (`google/gemma-4-e4b`)** (with Ollama/Gemini fallback for text) to resolve ambiguous bank narrations.
-- **Smurfing & Phantom Debit Checks**: Detects threshold-avoidance splitting (`< $10,000` in 14 days) and unmatched bank debits `>= $500`.
+## Server Operations
+- **Start Server (foreground)**:
+  ```bash
+  ./run.sh
+  ```
+- **Start Server (detached background)**:
+  ```bash
+  nohup ./run.sh > server.log 2>&1 &
+  ```
+- **Stop Server & Watcher**:
+  ```bash
+  ./stop.sh
+  ```
 
-## 5. Accounting Exports (`exporter.py`)
-- **QuickBooks CSV**: Exports all `RECONCILED` bank transactions plus all `READY_FOR_TALLY` / `VERIFIED_CLEAN` / `RECONCILED` invoices.
-- **Tally XML**: Generates import-ready Tally XML vouchers.
-- **Executive HTML Report**: Generates a standalone single-file audit report.
+## Two-Agent Pipeline & Rules
+1. **Multimodal Extraction (`extractor.py`, `llm_client.py`)**:
+   - Images (`.png`, `.jpg`, `.jpeg`) route exclusively to Groq Vision (`qwen/qwen3.8-27b`).
+   - Digital PDFs and bank CSVs use `pdfplumber` / `pypdf`.
+   - Extracts `vendor_name`, `invoice_number`, `invoice_date`, `due_date`, `subtotal`, `discount_amount`, `cgst_amount`, `sgst_amount`, `igst_amount`, `tax_amount`, `total_amount`.
+2. **Agent 1 — Forensic Auditor (`agents.py`)**:
+   - Checks zero/negative totals (`CRITICAL`), GST breakdown `CGST + SGST + IGST == tax_amount` (`HIGH`), final arithmetic `subtotal - discount + tax == total` (`HIGH`), `due_date < invoice_date` (`HIGH`), duplicate/near-duplicate invoices (`CRITICAL`), and BEC bank account changes (`CRITICAL`).
+   - Approving a flag (`POST /api/flags/{flag_id}/status?status=RESOLVED`) promotes the invoice to `READY_FOR_TALLY`.
+3. **Agent 2 — Tally Specialist (`agents.py`)**:
+   - Converts `VERIFIED_CLEAN` / `READY_FOR_TALLY` invoices into balanced Tally ERP/Prime XML vouchers.
+4. **Reconciliation & Exports (`reconciler.py`, `exporter.py`)**:
+   - `POST /api/reconcile`: Runs Tier 1 deterministic matching, Tier 2 LLM entity resolution, smurfing detection, and phantom debit checks.
+   - `GET /api/export/quickbooks`: Exports all `RECONCILED` bank transactions plus all `READY_FOR_TALLY` / `VERIFIED_CLEAN` / `RECONCILED` invoices.
+   - `GET /api/export/tally`: Exports Tally XML vouchers.
