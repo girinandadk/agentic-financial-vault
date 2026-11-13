@@ -406,7 +406,13 @@
             </thead>
             <tbody>
               {% for f in top_flags %}
-              <tr id="flag-row-{{ f.flag_id }}" style="cursor: pointer;" onclick="openSplitViewer('{{ f.raw_file_name }}', '{{ f.issue_type }}', '{{ f.severity }}', '{{ f.description | escape }}', '{{ f.flag_id }}')">
+              <tr id="flag-row-{{ f.flag_id }}" style="cursor: pointer;"
+                  data-file="{{ f.raw_file_name }}"
+                  data-issue="{{ f.issue_type }}"
+                  data-severity="{{ f.severity }}"
+                  data-desc="{{ f.description }}"
+                  data-flagid="{{ f.flag_id }}"
+                  onclick="openSplitViewerFromEl(this)">
                 <td>
                   <span class="badge {% if f.severity == 'CRITICAL' %}badge-critical{% elif f.severity == 'HIGH' %}badge-high{% else %}badge-medium{% endif %}">
                     {{ f.severity }}
@@ -421,7 +427,13 @@
                 <td onclick="event.stopPropagation();">
                   <div style="display:flex; gap:4px; align-items:center;">
                     {% if f.raw_file_name %}
-                    <button class="btn btn-primary btn-sm" style="font-size:11px; padding:3px 8px;" onclick="openSplitViewer('{{ f.raw_file_name }}', '{{ f.issue_type }}', '{{ f.severity }}', '{{ f.description | escape }}', '{{ f.flag_id }}')">🔍 Inspect</button>
+                    <button class="btn btn-primary btn-sm" style="font-size:11px; padding:3px 8px;"
+                            data-file="{{ f.raw_file_name }}"
+                            data-issue="{{ f.issue_type }}"
+                            data-severity="{{ f.severity }}"
+                            data-desc="{{ f.description }}"
+                            data-flagid="{{ f.flag_id }}"
+                            onclick="openSplitViewerFromEl(this)">🔍 Inspect</button>
                     {% endif %}
                     <button class="btn btn-secondary btn-sm" style="font-size:11px; padding:3px 8px;" onclick="updateFlagStatus({{ f.flag_id }}, 'RESOLVED')">Approve</button>
                     <button class="btn btn-danger btn-sm" style="font-size:11px; padding:3px 8px;" onclick="updateFlagStatus({{ f.flag_id }}, 'DISMISSED')">Dismiss</button>
@@ -464,7 +476,13 @@
             </thead>
             <tbody>
               {% for f in all_flags %}
-              <tr id="flag-detail-{{ f.flag_id }}" style="cursor: pointer;" onclick="openSplitViewer('{{ f.raw_file_name }}', '{{ f.issue_type }}', '{{ f.severity }}', '{{ f.description | escape }}', '{{ f.flag_id }}')">
+              <tr id="flag-detail-{{ f.flag_id }}" style="cursor: pointer;"
+                  data-file="{{ f.raw_file_name }}"
+                  data-issue="{{ f.issue_type }}"
+                  data-severity="{{ f.severity }}"
+                  data-desc="{{ f.description }}"
+                  data-flagid="{{ f.flag_id }}"
+                  onclick="openSplitViewerFromEl(this)">
                 <td>#{{ f.flag_id }}</td>
                 <td>
                   <span class="badge {% if f.severity == 'CRITICAL' %}badge-critical{% elif f.severity == 'HIGH' %}badge-high{% else %}badge-medium{% endif %}">
@@ -481,7 +499,13 @@
                 <td onclick="event.stopPropagation();">
                   <div style="display: flex; gap: 4px; align-items:center;">
                     {% if f.raw_file_name %}
-                    <button class="btn btn-primary btn-sm" style="font-size:11px; padding:3px 8px;" onclick="openSplitViewer('{{ f.raw_file_name }}', '{{ f.issue_type }}', '{{ f.severity }}', '{{ f.description | escape }}', '{{ f.flag_id }}')">🔍 Inspect</button>
+                    <button class="btn btn-primary btn-sm" style="font-size:11px; padding:3px 8px;"
+                            data-file="{{ f.raw_file_name }}"
+                            data-issue="{{ f.issue_type }}"
+                            data-severity="{{ f.severity }}"
+                            data-desc="{{ f.description }}"
+                            data-flagid="{{ f.flag_id }}"
+                            onclick="openSplitViewerFromEl(this)">🔍 Inspect</button>
                     {% endif %}
                     <button class="btn btn-secondary btn-sm" onclick="updateFlagStatus({{ f.flag_id }}, 'RESOLVED')">Approve</button>
                     <button class="btn btn-danger btn-sm" onclick="updateFlagStatus({{ f.flag_id }}, 'DISMISSED')">Dismiss</button>
@@ -1025,6 +1049,17 @@
       }
     }
   
+    function openSplitViewerFromEl(el) {
+      if (!el || !el.dataset) return;
+      openSplitViewer(
+        el.dataset.file || '',
+        el.dataset.issue || '',
+        el.dataset.severity || '',
+        el.dataset.desc || '',
+        el.dataset.flagid || ''
+      );
+    }
+
     function openSplitViewer(filename, issueType, severity, description, flagId) {
       if (!filename) {
         alert("This flag is not associated with a raw document file (e.g. Bank Debit narration).");
