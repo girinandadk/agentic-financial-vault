@@ -25,7 +25,7 @@ def export_quickbooks_csv() -> Path:
     with get_db() as conn:
         cur = conn.execute("""
             SELECT bt.txn_id, bt.txn_date, bt.raw_narration, bt.clean_merchant, bt.debit_amount, bt.credit_amount,
-                   i.invoice_number, i.total_amount, i.invoice_date, v.name as vendor_name, v.standard_category
+                   i.invoice_id, i.invoice_number, i.total_amount, i.invoice_date, v.name as vendor_name, v.standard_category
             FROM bank_transactions bt
             LEFT JOIN invoices i ON bt.matched_invoice_id = i.invoice_id
             LEFT JOIN vendors v ON i.vendor_id = v.vendor_id
@@ -33,6 +33,18 @@ def export_quickbooks_csv() -> Path:
             ORDER BY bt.txn_date ASC
         """)
         rows = cur.fetchall()
+
+        matched_inv_ids = {r["invoice_id"] for r in rows if r["invoice_id"] is not None}
+
+        # Also include all verified/clean invoices not yet matched to a bank transaction
+        verified_invs = conn.execute("""
+            SELECT i.invoice_id, i.invoice_number, i.invoice_date, i.total_amount, i.status, i.raw_file_name,
+                   v.name as vendor_name, v.standard_category
+            FROM invoices i
+            LEFT JOIN vendors v ON i.vendor_id = v.vendor_id
+            WHERE i.status IN ('READY_FOR_TALLY', 'VERIFIED_CLEAN', 'RECONCILED')
+            ORDER BY i.invoice_date ASC, i.invoice_id ASC
+        """).fetchall()
 
     with open(out_file, mode="w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
@@ -51,6 +63,19 @@ def export_quickbooks_csv() -> Path:
                 f"{amt:.2f}",
                 r["invoice_number"] or "N/A",
                 "RECONCILED"
+            ])
+        for inv in verified_invs:
+            if inv["invoice_id"] in matched_inv_ids:
+                continue
+            writer.writerow([
+                inv["invoice_date"] or "",
+                "Expense",
+                inv["vendor_name"] or "Unknown Payee",
+                inv["standard_category"] or "Corporate Expenses",
+                f"Verified Invoice #{inv['invoice_number']} ({inv['raw_file_name'] or 'bill'})",
+                f"{float(inv['total_amount']):.2f}",
+                inv["invoice_number"] or "N/A",
+                inv["status"]
             ])
 
     return out_file

@@ -97,7 +97,7 @@ def index(request: Request):
         """).fetchall()
 
         all_invoices = conn.execute("""
-            SELECT i.invoice_id, i.invoice_number, i.invoice_date, i.subtotal, i.tax_amount, i.total_amount, i.status, v.name as vendor_name
+            SELECT i.invoice_id, i.invoice_number, i.invoice_date, i.subtotal, i.tax_amount, i.total_amount, i.status, i.raw_file_name, v.name as vendor_name
             FROM invoices i
             LEFT JOIN vendors v ON i.vendor_id = v.vendor_id
             ORDER BY i.invoice_id DESC
@@ -274,9 +274,16 @@ def api_reconcile():
 
 @app.post("/api/flags/{flag_id}/status")
 def update_flag_status(flag_id: int, status: str = Query(...)):
-    """Updates an audit flag status (e.g. RESOLVED, DISMISSED, OPEN)."""
+    """Updates an audit flag status (e.g. RESOLVED, DISMISSED, OPEN). If approved (RESOLVED), promotes invoice to READY_FOR_TALLY."""
     with get_db() as conn:
+        flag = conn.execute("SELECT reference_type, reference_id FROM audit_flags WHERE flag_id = ?", (flag_id,)).fetchone()
         conn.execute("UPDATE audit_flags SET status = ? WHERE flag_id = ?", (status, flag_id))
+        if status == "RESOLVED" and flag and flag["reference_type"] == "INVOICE":
+            inv_id = flag["reference_id"]
+            conn.execute(
+                "UPDATE invoices SET status = 'READY_FOR_TALLY' WHERE invoice_id = ? AND status IN ('FLAGGED_ANOMALY', 'PENDING')",
+                (inv_id,)
+            )
     return {"status": "success", "flag_id": flag_id, "new_status": status}
 
 
