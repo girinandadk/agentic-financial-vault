@@ -54,13 +54,27 @@ Creates realistic mock vendor invoices, bank statements, and injected forensic a
 python generate_sample_data.py
 ```
 
-### 3. Run FinSentry
-Starts both the background resilient folder watcher and the FastAPI server on port 8000:
+### 3. Start FinSentry Server
+Starts both the background resilient folder watcher (`watcher.py`) and the FastAPI web cockpit (`app.py`) on port 8000:
 ```bash
 ./run.sh
 ```
-
+Or to run in the background (detached):
+```bash
+nohup ./run.sh > server.log 2>&1 &
+```
 Then open your browser to **[http://127.0.0.1:8000](http://127.0.0.1:8000)**.
+
+### 4. Stop FinSentry Server
+To shut down all running server processes, release port 8000, and stop the background folder watcher:
+```bash
+./stop.sh
+```
+Alternatively, if running interactively in terminal, press `Ctrl+C`, or run:
+```bash
+lsof -ti :8000 | xargs kill -9
+pkill -9 -f "watcher.py"
+```
 
 ---
 
