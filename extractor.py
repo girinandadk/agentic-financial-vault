@@ -36,6 +36,7 @@ class ExtractedInvoice(BaseModel):
     invoice_date: str = Field(description="Issue date of invoice in YYYY-MM-DD")
     due_date: Optional[str] = Field(default=None, description="Payment due date in YYYY-MM-DD if present")
     subtotal: float = Field(default=0.0, description="Pre-tax subtotal amount before discount/tax (numeric only, no currency symbol)")
+    line_items_sum: float = Field(default=0.0, description="Exact sum of all individual line item amounts (Qty * Unit Price) from the table (numeric only, 0.0 if no line items)")
     discount_amount: float = Field(default=0.0, description="Total discount amount if any (numeric only, 0.0 if none)")
     cgst_amount: float = Field(default=0.0, description="CGST tax amount if listed (numeric only, 0.0 if none)")
     sgst_amount: float = Field(default=0.0, description="SGST tax amount if listed (numeric only, 0.0 if none)")

@@ -69,6 +69,7 @@ def init_db():
             invoice_date DATE,
             due_date DATE,
             subtotal REAL NOT NULL DEFAULT 0.0,
+            line_items_sum REAL NOT NULL DEFAULT 0.0,
             discount_amount REAL NOT NULL DEFAULT 0.0,
             cgst_amount REAL NOT NULL DEFAULT 0.0,
             sgst_amount REAL NOT NULL DEFAULT 0.0,
@@ -116,6 +117,7 @@ def init_db():
             "ALTER TABLE invoices ADD COLUMN cgst_amount REAL NOT NULL DEFAULT 0.0;",
             "ALTER TABLE invoices ADD COLUMN sgst_amount REAL NOT NULL DEFAULT 0.0;",
             "ALTER TABLE invoices ADD COLUMN igst_amount REAL NOT NULL DEFAULT 0.0;",
+            "ALTER TABLE invoices ADD COLUMN line_items_sum REAL NOT NULL DEFAULT 0.0;",
         ]:
             try:
                 conn.execute(col_sql)

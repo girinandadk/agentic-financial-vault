@@ -67,6 +67,7 @@ def run_agent1_forensic_audit(invoice_id: int) -> Agent1AuditResult:
     with get_db() as conn:
         inv_row = conn.execute("""
             SELECT i.invoice_id, i.invoice_number, i.invoice_date, i.due_date, i.subtotal, 
+                   COALESCE(i.line_items_sum, 0.0) as line_items_sum,
                    COALESCE(i.discount_amount, 0.0) as discount_amount,
                    COALESCE(i.cgst_amount, 0.0) as cgst_amount,
                    COALESCE(i.sgst_amount, 0.0) as sgst_amount,
@@ -95,6 +96,7 @@ def run_agent1_forensic_audit(invoice_id: int) -> Agent1AuditResult:
     account_manipulation = False
 
     sub = float(inv["subtotal"])
+    line_items_sum = float(inv.get("line_items_sum") or 0.0)
     discount = float(inv.get("discount_amount") or 0.0)
     cgst = float(inv.get("cgst_amount") or 0.0)
     sgst = float(inv.get("sgst_amount") or 0.0)
@@ -108,7 +110,12 @@ def run_agent1_forensic_audit(invoice_id: int) -> Agent1AuditResult:
         severity = "CRITICAL"
         arithmetic_valid = False
 
-    # 2. GST Tax Breakdown & Final Amount Arithmetic verification
+    # 2. Line-item sum vs Subtotal, GST Tax Breakdown & Final Amount Arithmetic verification
+    if line_items_sum > 0 and abs(line_items_sum - sub) > 0.05:
+        issues.append(f"Line-item tampering / mismatch: Sum of line items (${line_items_sum:,.2f}) does not match stated Subtotal (${sub:,.2f})")
+        severity = "CRITICAL"
+        arithmetic_valid = False
+
     gst_sum = round(cgst + sgst + igst, 2)
     if gst_sum > 0 and abs(gst_sum - tax) > 0.05:
         issues.append(f"GST breakdown mismatch: CGST (${cgst:,.2f}) + SGST (${sgst:,.2f}) + IGST (${igst:,.2f}) = ${gst_sum:,.2f}, but Total Tax is ${tax:,.2f}")
