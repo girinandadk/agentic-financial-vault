@@ -58,7 +58,7 @@ def index(request: Request):
         open_flags = conn.execute("SELECT COUNT(*) as c FROM audit_flags WHERE status = 'OPEN'").fetchone()["c"]
         critical_flags = conn.execute("SELECT COUNT(*) as c FROM audit_flags WHERE status = 'OPEN' AND severity = 'CRITICAL'").fetchone()["c"]
 
-        # Lists
+        # Lists (most recently detected flags first)
         top_flags = conn.execute("""
             SELECT f.flag_id, f.reference_type, f.reference_id, f.severity, f.issue_type, f.description, f.status,
                    COALESCE(i.raw_file_name, '') as raw_file_name,
@@ -66,7 +66,7 @@ def index(request: Request):
             FROM audit_flags f
             LEFT JOIN invoices i ON f.reference_type = 'INVOICE' AND f.reference_id = i.invoice_id
             WHERE f.status = 'OPEN'
-            ORDER BY CASE f.severity WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'MEDIUM' THEN 3 ELSE 4 END, f.flag_id DESC
+            ORDER BY f.flag_id DESC
             LIMIT 8
         """).fetchall()
 
@@ -76,7 +76,7 @@ def index(request: Request):
                    COALESCE(i.invoice_number, '') as invoice_number
             FROM audit_flags f
             LEFT JOIN invoices i ON f.reference_type = 'INVOICE' AND f.reference_id = i.invoice_id
-            ORDER BY CASE f.severity WHEN 'CRITICAL' THEN 1 WHEN 'HIGH' THEN 2 WHEN 'MEDIUM' THEN 3 ELSE 4 END, f.flag_id DESC
+            ORDER BY f.flag_id DESC
         """).fetchall()
 
         reconciled_list = conn.execute("""
