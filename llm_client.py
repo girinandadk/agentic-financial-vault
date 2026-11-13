@@ -25,6 +25,10 @@ LMSTUDIO_HOST = os.getenv("LMSTUDIO_HOST", "http://127.0.0.1:1234/v1").rstrip("/
 LMSTUDIO_MODEL = os.getenv("LMSTUDIO_MODEL", "google/gemma-4-e4b")
 LMSTUDIO_TIMEOUT = float(os.getenv("LMSTUDIO_TIMEOUT", "45.0"))
 
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "").strip()
+GROQ_VISION_MODEL = os.getenv("GROQ_VISION_MODEL", "qwen/qwen3.8-27b")
+GROQ_TIMEOUT = float(os.getenv("GROQ_TIMEOUT", "30.0"))
+
 OLLAMA_HOST = os.getenv("OLLAMA_HOST", "http://localhost:11434").rstrip("/")
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma4:e4b")
 OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "4096"))
@@ -48,6 +52,61 @@ def clean_markdown_json(text: str) -> str:
         t = re.sub(r"^```(?:json)?\s*", "", t, flags=re.IGNORECASE)
         t = re.sub(r"\s*```$", "", t)
     return t.strip()
+
+
+def call_groq_vision(prompt: str, image_b64: str, mime_type: str = "image/jpeg", json_schema: Optional[dict] = None) -> Optional[str]:
+    """Calls Groq OpenAI-compatible Vision API (qwen/qwen3.8-27b) for bill extraction."""
+    api_key = os.getenv("GROQ_API_KEY", GROQ_API_KEY).strip()
+    if not api_key or api_key == "your_groq_api_key_here":
+        return None
+
+    content = [
+        {"type": "text", "text": prompt},
+        {
+            "type": "image_url",
+            "image_url": {"url": f"data:{mime_type};base64,{image_b64}"}
+        }
+    ]
+
+    payload: Dict[str, Any] = {
+        "model": os.getenv("GROQ_VISION_MODEL", GROQ_VISION_MODEL),
+        "messages": [
+            {
+                "role": "system",
+                "content": "You are a precise corporate financial audit AI. Return strictly valid raw JSON matching the requested schema without markdown formatting or conversational filler."
+            },
+            {"role": "user", "content": content}
+        ],
+        "temperature": 0.1,
+    }
+
+    if json_schema:
+        payload["response_format"] = {"type": "json_object"}
+        payload["messages"][0]["content"] += f"\nJSON Schema:\n{json.dumps(json_schema)}"
+
+    try:
+        with httpx.Client(timeout=GROQ_TIMEOUT) as client:
+            resp = client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {api_key}",
+                    "Content-Type": "application/json"
+                },
+                json=payload,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                choices = data.get("choices", [])
+                if choices:
+                    out = choices[0].get("message", {}).get("content", "").strip()
+                    if out:
+                        logger.info(f"Groq Vision ({payload['model']}) responded successfully.")
+                        return out
+            else:
+                logger.warning(f"Groq Vision non-200 status: {resp.status_code} - {resp.text[:160]}")
+    except Exception as e:
+        logger.warning(f"Groq Vision call failed: {e}")
+    return None
 
 
 def call_local_lmstudio(prompt: str, image_b64: Optional[str] = None, mime_type: str = "image/jpeg", json_schema: Optional[dict] = None) -> Optional[str]:
@@ -208,9 +267,20 @@ def generate_structured_output(
         import base64
         image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
-    # For Vision / Image OCR: prefer Gemini Vision first for high-accuracy number/handwriting/table OCR,
-    # then fall back to local LM Studio Gemma 4 if Gemini is unavailable.
+    # For Vision / Image OCR:
+    # 1. Try Groq Vision (qwen/qwen3.8-27b) if GROQ_API_KEY is configured
+    # 2. Fallback to Gemini Vision
+    # 3. Fallback to local LM Studio Gemma 4 / Ollama
     if image_bytes or image_b64:
+        if image_b64:
+            groq_out = call_groq_vision(prompt, image_b64=image_b64, mime_type=mime_type, json_schema=json_schema)
+            if groq_out:
+                try:
+                    cleaned = clean_markdown_json(groq_out)
+                    return schema_cls.model_validate_json(cleaned)
+                except Exception as e:
+                    logger.warning(f"Failed to validate Groq Vision output against {schema_cls.__name__}: {e}")
+
         gemini_out = call_gemini_api(prompt, image_bytes=image_bytes, mime_type=mime_type, response_schema=schema_cls)
         if gemini_out:
             try:
