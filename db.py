@@ -67,6 +67,7 @@ def init_db():
             vendor_id INTEGER,
             invoice_number TEXT NOT NULL,
             invoice_date DATE,
+            due_date DATE,
             subtotal REAL NOT NULL DEFAULT 0.0,
             tax_amount REAL NOT NULL DEFAULT 0.0,
             total_amount REAL NOT NULL,
@@ -104,6 +105,11 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_bank_status ON bank_transactions(status);
         CREATE INDEX IF NOT EXISTS idx_audit_status ON audit_flags(status);
         """)
+        # Safe migration for existing databases
+        try:
+            conn.execute("ALTER TABLE invoices ADD COLUMN due_date DATE;")
+        except sqlite3.OperationalError:
+            pass
 
 if __name__ == "__main__":
     init_db()

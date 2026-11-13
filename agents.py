@@ -66,7 +66,7 @@ def run_agent1_forensic_audit(invoice_id: int) -> Agent1AuditResult:
     """
     with get_db() as conn:
         inv_row = conn.execute("""
-            SELECT i.invoice_id, i.invoice_number, i.invoice_date, i.subtotal, i.tax_amount, 
+            SELECT i.invoice_id, i.invoice_number, i.invoice_date, i.due_date, i.subtotal, i.tax_amount, 
                    i.total_amount, i.raw_file_name, i.status, i.vendor_id,
                    v.name as vendor_name, v.tax_id, v.bank_account_hash
             FROM invoices i
@@ -106,6 +106,13 @@ def run_agent1_forensic_audit(invoice_id: int) -> Agent1AuditResult:
         issues.append(f"Arithmetic corruption: Subtotal (${sub:,.2f}) + Tax (${tax:,.2f}) = ${expected_tot:,.2f}, but Total is ${tot:,.2f}")
         severity = "HIGH" if severity != "CRITICAL" else "CRITICAL"
         arithmetic_valid = False
+
+    # 2b. Date logic check (Due Date before Issue Date)
+    inv_date = (inv.get("invoice_date") or "").strip()
+    due_date = (inv.get("due_date") or "").strip()
+    if inv_date and due_date and len(inv_date) == 10 and len(due_date) == 10 and due_date < inv_date:
+        issues.append(f"Date anomaly: Due date ({due_date}) is earlier than Issue date ({inv_date})")
+        severity = "HIGH" if severity != "CRITICAL" else "CRITICAL"
 
     # 3. Duplicate checks in DB (check against already reconciled or older records)
     with get_db() as conn:

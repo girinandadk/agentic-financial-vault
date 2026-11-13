@@ -133,12 +133,13 @@ def process_dropped_file(file_path: Path):
 
                 # 2. Insert Invoice
                 inv_ins = conn.execute("""
-                    INSERT INTO invoices (vendor_id, invoice_number, invoice_date, subtotal, tax_amount, total_amount, raw_file_name, status)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, 'PENDING')
+                    INSERT INTO invoices (vendor_id, invoice_number, invoice_date, due_date, subtotal, tax_amount, total_amount, raw_file_name, status)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'PENDING')
                 """, (
                     vendor_id,
                     extracted.invoice_number,
                     extracted.invoice_date,
+                    extracted.due_date,
                     extracted.subtotal,
                     extracted.tax_amount,
                     extracted.total_amount,
